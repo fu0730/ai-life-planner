@@ -1,7 +1,15 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { Task, Category } from '@/types';
+import type { Task, Category, TimeBlock } from '@/types';
+
+const BLOCK_OPTIONS: { value: TimeBlock | ''; label: string; emoji: string }[] = [
+  { value: '', label: '未設定', emoji: '📌' },
+  { value: 'morning', label: '朝', emoji: '🌅' },
+  { value: 'forenoon', label: '午前', emoji: '🌤' },
+  { value: 'afternoon', label: '午後', emoji: '🌇' },
+  { value: 'night', label: '夜', emoji: '🌙' },
+];
 
 interface AddTaskModalProps {
   isOpen: boolean;
@@ -17,6 +25,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
   const [categoryId, setCategoryId] = useState<number>(0);
   const [priority, setPriority] = useState<'high' | 'medium' | 'low'>('medium');
   const [dueDate, setDueDate] = useState('');
+  const [block, setBlock] = useState<TimeBlock | ''>('');
 
   useEffect(() => {
     if (editingTask) {
@@ -25,12 +34,14 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
       setCategoryId(editingTask.categoryId);
       setPriority(editingTask.priority);
       setDueDate(editingTask.dueDate || '');
+      setBlock(editingTask.block || '');
     } else {
       setTitle('');
       setMemo('');
       setCategoryId(categories[0]?.id || 0);
       setPriority('medium');
       setDueDate('');
+      setBlock('');
     }
   }, [editingTask, isOpen, categories]);
 
@@ -39,7 +50,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
-    onSave({ title: title.trim(), memo: memo.trim() || undefined, categoryId, priority, dueDate: dueDate || undefined });
+    onSave({ title: title.trim(), memo: memo.trim() || undefined, categoryId, priority, dueDate: dueDate || undefined, block: block || undefined });
     onClose();
   };
 
@@ -119,6 +130,26 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                   }`}
                 >
                   {p.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">時間帯（任意）</label>
+            <div className="flex flex-wrap gap-2">
+              {BLOCK_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setBlock(opt.value)}
+                  className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    block === opt.value
+                      ? 'bg-blue-500 text-white shadow-sm'
+                      : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700'
+                  }`}
+                >
+                  {opt.emoji} {opt.label}
                 </button>
               ))}
             </div>
