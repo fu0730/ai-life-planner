@@ -31,13 +31,23 @@ export default function Home() {
   const [isReflectionOpen, setIsReflectionOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
+  const [settings, setSettings] = useState<Settings | undefined>(undefined);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
-  const settings = useLiveQuery(() => getSettings());
+
+  // settingsの監視
+  const settingsFromDb = useLiveQuery(() => db.settings.toCollection().first());
 
   useEffect(() => {
     seedDefaultCategories();
+    getSettings().then(setSettings);
   }, []);
+
+  useEffect(() => {
+    if (settingsFromDb) {
+      setSettings(settingsFromDb);
+    }
+  }, [settingsFromDb]);
 
   // ダークモード適用
   useEffect(() => {

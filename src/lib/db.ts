@@ -8,6 +8,11 @@ const db = new Dexie('LifePlannerDB') as Dexie & {
   settings: EntityTable<Settings, 'id'>;
 };
 
+db.version(1).stores({
+  tasks: '++id, categoryId, completed, dueDate, createdAt',
+  categories: '++id, name, order, type',
+});
+
 db.version(2).stores({
   tasks: '++id, categoryId, completed, dueDate, createdAt, completedAt',
   categories: '++id, name, order, type',
