@@ -17,3 +17,19 @@ export interface Task {
   createdAt: string;
   completedAt?: string;
 }
+
+export interface DailyReflection {
+  id?: number;
+  date: string;
+  completedCount: number;
+  totalCount: number;
+  note?: string;
+  createdAt: string;
+}
+
+export interface Settings {
+  id?: number;
+  theme: 'light' | 'dark';
+  soundEnabled: boolean;
+  sortBy: 'priority' | 'dueDate' | 'createdAt';
+}

@@ -46,10 +46,10 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
   return (
     <div className="fixed inset-0 bg-black/30 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div
-        className="bg-white w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 max-h-[85vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 max-h-[85vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-gray-800 mb-4">
+        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">
           {editingTask ? 'タスクを編集' : 'タスクを追加'}
         </h2>
 
@@ -60,7 +60,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="タスク名"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+              className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
               autoFocus
             />
           </div>
@@ -70,13 +70,13 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
               value={memo}
               onChange={(e) => setMemo(e.target.value)}
               placeholder="メモ（任意）"
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm resize-none"
+              className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm resize-none bg-white dark:bg-gray-700 dark:text-gray-100"
               rows={2}
             />
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-1.5 block">カテゴリ</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">カテゴリ</label>
             <div className="flex flex-wrap gap-2">
               {categories.map((cat) => (
                 <button
@@ -86,7 +86,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                   className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
                     categoryId === cat.id
                       ? 'text-white shadow-sm'
-                      : 'text-gray-600 bg-gray-100'
+                      : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700'
                   }`}
                   style={categoryId === cat.id ? { backgroundColor: cat.color } : {}}
                 >
@@ -97,7 +97,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-1.5 block">優先度</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">優先度</label>
             <div className="flex gap-2">
               {([
                 { value: 'low', label: '低' },
@@ -115,7 +115,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                         : p.value === 'medium'
                         ? 'bg-yellow-500 text-white'
                         : 'bg-gray-500 text-white'
-                      : 'text-gray-600 bg-gray-100'
+                      : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700'
                   }`}
                 >
                   {p.label}
@@ -125,12 +125,12 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
           </div>
 
           <div>
-            <label className="text-xs text-gray-500 mb-1.5 block">期限（任意）</label>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">期限（任意）</label>
             <input
               type="date"
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm"
+              className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
             />
           </div>
 
@@ -138,7 +138,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 text-sm text-gray-500 bg-gray-100 rounded-xl hover:bg-gray-200 transition-colors"
+              className="flex-1 py-3 text-sm text-gray-500 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
             >
               キャンセル
             </button>

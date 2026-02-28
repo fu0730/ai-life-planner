@@ -5,14 +5,17 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import TaskItem from './TaskItem';
 import ProgressBar from './ProgressBar';
-import type { Task } from '@/types';
+import { playCompleteSound } from '@/lib/sounds';
+import type { Task, Settings } from '@/types';
 
 interface TasksViewProps {
   onEditTask: (task: Task) => void;
+  settings: Settings | undefined;
 }
 
-export default function TasksView({ onEditTask }: TasksViewProps) {
+export default function TasksView({ onEditTask, settings }: TasksViewProps) {
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
   const tasks = useLiveQuery(
@@ -27,16 +30,23 @@ export default function TasksView({ onEditTask }: TasksViewProps) {
     return <div className="flex items-center justify-center py-12 text-gray-400 text-sm">読み込み中...</div>;
   }
 
-  const completed = tasks.filter((t) => t.completed).length;
+  const sortBy = settings?.sortBy || 'priority';
+  const activeTasks = tasks.filter((t) => !t.completed);
+  const completedTasks = tasks.filter((t) => t.completed);
+  const completed = completedTasks.length;
   const total = tasks.length;
 
   const toggleTask = async (id: number) => {
     const task = await db.tasks.get(id);
     if (!task) return;
+    const nowCompleting = !task.completed;
     await db.tasks.update(id, {
-      completed: !task.completed,
-      completedAt: !task.completed ? new Date().toISOString() : undefined,
+      completed: nowCompleting,
+      completedAt: nowCompleting ? new Date().toISOString() : undefined,
     });
+    if (nowCompleting && settings?.soundEnabled !== false) {
+      playCompleteSound();
+    }
   };
 
   const deleteTask = async (id: number) => {
@@ -47,6 +57,21 @@ export default function TasksView({ onEditTask }: TasksViewProps) {
     return categories.find((c) => c.id === categoryId);
   };
 
+  const sortTasks = (taskList: Task[]) => {
+    return [...taskList].sort((a, b) => {
+      if (sortBy === 'priority') {
+        const order = { high: 0, medium: 1, low: 2 };
+        return order[a.priority] - order[b.priority];
+      }
+      if (sortBy === 'dueDate') {
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return a.dueDate.localeCompare(b.dueDate);
+      }
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  };
+
   return (
     <div className="space-y-4">
       {/* カテゴリタブ */}
@@ -55,8 +80,8 @@ export default function TasksView({ onEditTask }: TasksViewProps) {
           onClick={() => setActiveCategoryId(null)}
           className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
             activeCategoryId === null
-              ? 'bg-gray-800 text-white'
-              : 'bg-gray-100 text-gray-600'
+              ? 'bg-gray-800 dark:bg-gray-200 text-white dark:text-gray-800'
+              : 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
           }`}
         >
           すべて
@@ -68,7 +93,7 @@ export default function TasksView({ onEditTask }: TasksViewProps) {
             className={`px-3 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-all ${
               activeCategoryId === cat.id
                 ? 'text-white shadow-sm'
-                : 'text-gray-600 bg-gray-100'
+                : 'text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-700'
             }`}
             style={activeCategoryId === cat.id ? { backgroundColor: cat.color } : {}}
           >
@@ -77,32 +102,60 @@ export default function TasksView({ onEditTask }: TasksViewProps) {
         ))}
       </div>
 
+      {/* 並び替え */}
+      <div className="flex items-center justify-between">
+        <select
+          value={sortBy}
+          onChange={async (e) => {
+            const { updateSettings } = await import('@/lib/settings');
+            await updateSettings({ sortBy: e.target.value as Settings['sortBy'] });
+          }}
+          className="text-xs bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-lg px-2 py-1 border-0 focus:outline-none"
+        >
+          <option value="priority">優先度順</option>
+          <option value="dueDate">期限順</option>
+          <option value="createdAt">作成日順</option>
+        </select>
+        {completedTasks.length > 0 && (
+          <button
+            onClick={() => setShowCompleted(!showCompleted)}
+            className="text-xs text-gray-500 dark:text-gray-400"
+          >
+            完了済み {showCompleted ? '隠す' : `表示(${completedTasks.length})`}
+          </button>
+        )}
+      </div>
+
       {total > 0 && <ProgressBar completed={completed} total={total} />}
 
-      {total === 0 ? (
+      {activeTasks.length === 0 && completedTasks.length === 0 ? (
         <div className="text-center py-16">
           <p className="text-4xl mb-3">📋</p>
-          <p className="text-gray-500 text-sm">タスクはまだないよ</p>
-          <p className="text-gray-400 text-xs mt-1">右下の＋から追加してみよう</p>
+          <p className="text-gray-500 dark:text-gray-400 text-sm">タスクはまだないよ</p>
+          <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">右下の＋から追加してみよう</p>
         </div>
       ) : (
         <div className="space-y-2">
-          {tasks
-            .sort((a, b) => {
-              if (a.completed !== b.completed) return a.completed ? 1 : -1;
-              const priorityOrder = { high: 0, medium: 1, low: 2 };
-              return priorityOrder[a.priority] - priorityOrder[b.priority];
-            })
-            .map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                category={getCategoryForTask(task.categoryId)}
-                onToggle={toggleTask}
-                onDelete={deleteTask}
-                onEdit={onEditTask}
-              />
-            ))}
+          {sortTasks(activeTasks).map((task) => (
+            <TaskItem
+              key={task.id}
+              task={task}
+              category={getCategoryForTask(task.categoryId)}
+              onToggle={toggleTask}
+              onDelete={deleteTask}
+              onEdit={onEditTask}
+            />
+          ))}
+          {showCompleted && completedTasks.map((task) => (
+            <TaskItem
+              key={task.id}
+              task={task}
+              category={getCategoryForTask(task.categoryId)}
+              onToggle={toggleTask}
+              onDelete={deleteTask}
+              onEdit={onEditTask}
+            />
+          ))}
         </div>
       )}
     </div>

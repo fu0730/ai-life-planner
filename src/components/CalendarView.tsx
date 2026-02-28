@@ -6,6 +6,7 @@ import { db } from '@/lib/db';
 
 export default function CalendarView() {
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
@@ -30,8 +31,10 @@ export default function CalendarView() {
     return categories.find((c) => c.id === categoryId)?.color || '#ccc';
   };
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
+  const prevMonth = () => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDay(null); };
+  const nextMonth = () => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDay(null); };
+
+  const selectedDateTasks = selectedDay ? getTasksForDate(selectedDay) : [];
 
   const days = [];
   for (let i = 0; i < firstDay; i++) {
@@ -41,15 +44,20 @@ export default function CalendarView() {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     const dayTasks = getTasksForDate(day);
     const isToday = dateStr === today;
+    const isSelected = selectedDay === day;
 
     days.push(
-      <div
+      <button
         key={day}
-        className={`min-h-[48px] p-1 rounded-lg text-center ${
-          isToday ? 'bg-blue-50 ring-2 ring-blue-300' : ''
+        onClick={() => setSelectedDay(day === selectedDay ? null : day)}
+        className={`min-h-[48px] p-1 rounded-lg text-center transition-all ${
+          isSelected ? 'bg-blue-100 dark:bg-blue-900/40 ring-2 ring-blue-400' :
+          isToday ? 'bg-blue-50 dark:bg-blue-900/20' : 'hover:bg-gray-50 dark:hover:bg-gray-800'
         }`}
       >
-        <span className={`text-xs ${isToday ? 'font-bold text-blue-600' : 'text-gray-600'}`}>
+        <span className={`text-xs ${
+          isToday ? 'font-bold text-blue-600 dark:text-blue-400' : 'text-gray-600 dark:text-gray-400'
+        }`}>
           {day}
         </span>
         <div className="flex flex-wrap justify-center gap-0.5 mt-0.5">
@@ -61,32 +69,58 @@ export default function CalendarView() {
             />
           ))}
         </div>
-      </div>
+      </button>
     );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <button onClick={prevMonth} className="p-2 text-gray-500 hover:text-gray-700">
+        <button onClick={prevMonth} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700">
           ←
         </button>
-        <h2 className="text-base font-bold text-gray-800">
+        <h2 className="text-base font-bold text-gray-800 dark:text-gray-100">
           {year}年{month + 1}月
         </h2>
-        <button onClick={nextMonth} className="p-2 text-gray-500 hover:text-gray-700">
+        <button onClick={nextMonth} className="p-2 text-gray-500 dark:text-gray-400 hover:text-gray-700">
           →
         </button>
       </div>
 
       <div className="grid grid-cols-7 gap-1">
         {['日', '月', '火', '水', '木', '金', '土'].map((d) => (
-          <div key={d} className="text-center text-xs text-gray-400 py-1 font-medium">
+          <div key={d} className="text-center text-xs text-gray-400 dark:text-gray-500 py-1 font-medium">
             {d}
           </div>
         ))}
         {days}
       </div>
+
+      {/* 選択した日のタスク */}
+      {selectedDay && (
+        <div className="bg-white dark:bg-gray-800 rounded-xl p-4 border border-gray-100 dark:border-gray-700">
+          <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+            {month + 1}月{selectedDay}日のタスク
+          </h3>
+          {selectedDateTasks.length === 0 ? (
+            <p className="text-xs text-gray-400 dark:text-gray-500">タスクはないよ</p>
+          ) : (
+            <div className="space-y-2">
+              {selectedDateTasks.map((t) => (
+                <div key={t.id} className="flex items-center gap-2">
+                  <div
+                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: getCategoryColor(t.categoryId) }}
+                  />
+                  <span className={`text-sm ${t.completed ? 'line-through text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
+                    {t.title}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

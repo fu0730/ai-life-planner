@@ -7,10 +7,14 @@ import TodayView from '@/components/TodayView';
 import TasksView from '@/components/TasksView';
 import CalendarView from '@/components/CalendarView';
 import AddTaskModal from '@/components/AddTaskModal';
+import SettingsView from '@/components/SettingsView';
+import ReflectionModal from '@/components/ReflectionModal';
+import WeeklyReview from '@/components/WeeklyReview';
 import { db } from '@/lib/db';
 import { seedDefaultCategories } from '@/lib/seed';
+import { getSettings } from '@/lib/settings';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { Task } from '@/types';
+import type { Task, Settings } from '@/types';
 
 type Tab = 'today' | 'tasks' | 'calendar';
 
@@ -23,13 +27,24 @@ const tabTitles: Record<Tab, string> = {
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isReflectionOpen, setIsReflectionOpen] = useState(false);
+  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
+  const settings = useLiveQuery(() => getSettings());
 
   useEffect(() => {
     seedDefaultCategories();
   }, []);
+
+  // ダークモード適用
+  useEffect(() => {
+    if (settings) {
+      document.documentElement.classList.toggle('dark', settings.theme === 'dark');
+    }
+  }, [settings]);
 
   const handleSaveTask = async (
     taskData: Omit<Task, 'id' | 'completed' | 'createdAt' | 'completedAt'>
@@ -57,16 +72,18 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen bg-[#f8f9fa]">
+    <div className="min-h-screen bg-[#f8f9fa] dark:bg-gray-900 transition-colors">
       <Header
         title={tabTitles[activeTab]}
-        onSettingsClick={() => {/* TODO: 設定画面 */}}
+        onSettingsClick={() => setIsSettingsOpen(true)}
+        onReflectionClick={() => setIsReflectionOpen(true)}
+        onReviewClick={() => setIsReviewOpen(true)}
       />
 
       <main className="pt-14 pb-20 px-4 max-w-lg mx-auto">
         <div className="py-4">
-          {activeTab === 'today' && <TodayView onEditTask={handleEditTask} />}
-          {activeTab === 'tasks' && <TasksView onEditTask={handleEditTask} />}
+          {activeTab === 'today' && <TodayView onEditTask={handleEditTask} settings={settings} />}
+          {activeTab === 'tasks' && <TasksView onEditTask={handleEditTask} settings={settings} />}
           {activeTab === 'calendar' && <CalendarView />}
         </div>
       </main>
@@ -91,6 +108,22 @@ export default function Home() {
         onSave={handleSaveTask}
         categories={categories || []}
         editingTask={editingTask}
+      />
+
+      <SettingsView
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        settings={settings}
+      />
+
+      <ReflectionModal
+        isOpen={isReflectionOpen}
+        onClose={() => setIsReflectionOpen(false)}
+      />
+
+      <WeeklyReview
+        isOpen={isReviewOpen}
+        onClose={() => setIsReviewOpen(false)}
       />
     </div>
   );

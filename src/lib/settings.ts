@@ -1,0 +1,20 @@
+import { db } from './db';
+import type { Settings } from '@/types';
+
+const DEFAULT_SETTINGS: Omit<Settings, 'id'> = {
+  theme: 'light',
+  soundEnabled: true,
+  sortBy: 'priority',
+};
+
+export async function getSettings(): Promise<Settings> {
+  const settings = await db.settings.toCollection().first();
+  if (settings) return settings;
+  const id = await db.settings.add({ ...DEFAULT_SETTINGS });
+  return { id, ...DEFAULT_SETTINGS };
+}
+
+export async function updateSettings(updates: Partial<Omit<Settings, 'id'>>) {
+  const settings = await getSettings();
+  await db.settings.update(settings.id!, updates);
+}
