@@ -10,18 +10,25 @@ import type { Task, Settings } from '@/types';
 
 interface TasksViewProps {
   onEditTask: (task: Task) => void;
+  onAddSubtask: (parentTask: Task) => void;
   settings: Settings | undefined;
 }
 
-export default function TasksView({ onEditTask, settings }: TasksViewProps) {
+export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksViewProps) {
   const [activeCategoryId, setActiveCategoryId] = useState<number | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
   const tasks = useLiveQuery(
-    () => {
-      if (activeCategoryId === null) return db.tasks.toArray();
-      return db.tasks.where('categoryId').equals(activeCategoryId).toArray();
+    async () => {
+      let all: Task[];
+      if (activeCategoryId === null) {
+        all = await db.tasks.toArray();
+      } else {
+        all = await db.tasks.where('categoryId').equals(activeCategoryId).toArray();
+      }
+      // サブタスクを除外（トップレベルのみ表示）
+      return all.filter(t => !t.parentId);
     },
     [activeCategoryId]
   );
@@ -50,6 +57,12 @@ export default function TasksView({ onEditTask, settings }: TasksViewProps) {
   };
 
   const deleteTask = async (id: number) => {
+    // サブタスクも一緒に削除
+    const subtasks = await db.tasks.where('parentId').equals(id).toArray();
+    const subtaskIds = subtasks.map(s => s.id!).filter(Boolean);
+    if (subtaskIds.length > 0) {
+      await db.tasks.bulkDelete(subtaskIds);
+    }
     await db.tasks.delete(id);
   };
 
@@ -144,6 +157,8 @@ export default function TasksView({ onEditTask, settings }: TasksViewProps) {
               onToggle={toggleTask}
               onDelete={deleteTask}
               onEdit={onEditTask}
+              onAddSubtask={onAddSubtask}
+              settings={settings}
             />
           ))}
           {showCompleted && completedTasks.map((task) => (
@@ -154,6 +169,8 @@ export default function TasksView({ onEditTask, settings }: TasksViewProps) {
               onToggle={toggleTask}
               onDelete={deleteTask}
               onEdit={onEditTask}
+              onAddSubtask={onAddSubtask}
+              settings={settings}
             />
           ))}
         </div>

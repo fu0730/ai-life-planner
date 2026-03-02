@@ -15,8 +15,10 @@ export interface Task {
   categoryId: number;
   completed: boolean;
   priority: 'high' | 'medium' | 'low';
+  startDate?: string;
   dueDate?: string;
   block?: TimeBlock;
+  parentId?: number;
   createdAt: string;
   completedAt?: string;
 }
@@ -47,9 +49,27 @@ export interface DailyReflection {
   createdAt: string;
 }
 
+export interface UserProfile {
+  id?: number;
+  wakeUpTime: string;       // "07:00"
+  bedTime: string;          // "23:00"
+  dreams?: string;          // やりたいこと・夢
+  idealSelf?: string;       // なりたい自分
+  createdAt: string;
+}
+
 export interface Settings {
   id?: number;
   theme: 'light' | 'dark';
   soundEnabled: boolean;
   sortBy: 'priority' | 'dueDate' | 'createdAt';
+  setupCompleted: boolean;
+}
+
+export interface ChatMessage {
+  id?: number;
+  role: 'user' | 'assistant';
+  content: string;
+  actions?: string; // AIAction[]のJSON文字列
+  createdAt: string;
 }

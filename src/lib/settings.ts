@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS: Omit<Settings, 'id'> = {
   theme: 'light',
   soundEnabled: true,
   sortBy: 'priority',
+  setupCompleted: false,
 };
 
 export async function getSettings(): Promise<Settings> {

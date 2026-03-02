@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 
@@ -34,6 +34,17 @@ export default function ReflectionModal({ isOpen, onClose }: ReflectionModalProp
     }
   }, [existingReflection]);
 
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen || !todayTasks) return null;
 
   const completed = todayTasks.filter((t) => t.completed).length;
@@ -64,9 +75,9 @@ export default function ReflectionModal({ isOpen, onClose }: ReflectionModalProp
   };
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center animate-overlay" role="dialog" aria-modal="true" aria-labelledby="reflection-modal-title" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 w-full max-w-sm mx-4 rounded-2xl p-6"
+        className="bg-white dark:bg-gray-800 w-full max-w-sm mx-4 rounded-2xl p-6 animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         {saved ? (
@@ -77,7 +88,7 @@ export default function ReflectionModal({ isOpen, onClose }: ReflectionModalProp
           </div>
         ) : (
           <>
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 text-center mb-4">今日のふりかえり</h2>
+            <h2 id="reflection-modal-title" className="text-lg font-bold text-gray-800 dark:text-gray-100 text-center mb-4">今日のふりかえり</h2>
 
             <div className="bg-gray-50 dark:bg-gray-700 rounded-xl p-4 mb-4 text-center">
               <p className="text-3xl font-bold text-blue-500 mb-1">{completed}/{total}</p>

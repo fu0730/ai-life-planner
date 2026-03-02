@@ -60,3 +60,28 @@ export function playAllCompleteSound() {
     // ignore audio errors
   }
 }
+
+export function playTimerEndSound() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  try {
+    // ベル風の音を2回鳴らす
+    [0, 0.3].forEach((offset) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, ctx.currentTime + offset);
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + offset);
+      gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + offset + 0.25);
+
+      osc.start(ctx.currentTime + offset);
+      osc.stop(ctx.currentTime + offset + 0.25);
+    });
+  } catch {
+    // ignore audio errors
+  }
+}

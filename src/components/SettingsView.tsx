@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { updateSettings } from '@/lib/settings';
@@ -25,6 +25,17 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
   const [showAddCategory, setShowAddCategory] = useState(false);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, handleKeyDown]);
 
   if (!isOpen || !settings) return null;
 
@@ -66,17 +77,18 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
   };
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 z-50 animate-overlay" role="dialog" aria-modal="true" aria-labelledby="settings-title" onClick={onClose}>
       <div
-        className="fixed right-0 top-0 bottom-0 w-full max-w-sm bg-white dark:bg-gray-900 shadow-xl overflow-y-auto"
+        className="fixed right-0 top-0 bottom-0 w-full max-w-sm bg-white dark:bg-gray-900 shadow-xl overflow-y-auto animate-slide-in-right"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100">設定</h2>
+            <h2 id="settings-title" className="text-lg font-bold text-gray-800 dark:text-gray-100">設定</h2>
             <button
               onClick={onClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500"
+              aria-label="設定を閉じる"
+              className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-500 active:scale-90 transition-transform"
             >
               ✕
             </button>

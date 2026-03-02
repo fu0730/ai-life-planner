@@ -1,16 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import TaskItem from './TaskItem';
 import ProgressBar from './ProgressBar';
-import { playCompleteSound, playAllCompleteSound } from '@/lib/sounds';
+import { playCompleteSound, playAllCompleteSound, playTimerEndSound } from '@/lib/sounds';
+import Confetti from './Confetti';
 import type { Task, Routine, RoutineCompletion, Settings, TimeBlock } from '@/types';
 
 interface TodayViewProps {
   onEditTask: (task: Task) => void;
   onEditRoutine: (routine: Routine) => void;
+  onAddSubtask: (parentTask: Task) => void;
   settings: Settings | undefined;
 }
 
@@ -27,77 +29,233 @@ interface RoutineItemProps {
   onToggle: () => void;
   onEdit: (routine: Routine) => void;
   onDelete: (id: number) => void;
+  soundEnabled: boolean;
 }
 
-function RoutineItem({ routine, completed, onToggle, onEdit, onDelete }: RoutineItemProps) {
+function formatTime(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function RoutineItem({ routine, completed, onToggle, onEdit, onDelete, soundEnabled }: RoutineItemProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState<number | null>(null);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [timerFinished, setTimerFinished] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const clearTimer = useCallback(() => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+  }, []);
+
+  // タイマー完了時に自動クリーンアップ
+  useEffect(() => {
+    return () => clearTimer();
+  }, [clearTimer]);
+
+  const startTimer = () => {
+    if (!routine.estimatedMinutes) return;
+    const totalSeconds = routine.estimatedMinutes * 60;
+    setTimerSeconds(totalSeconds);
+    setIsTimerRunning(true);
+    setTimerFinished(false);
+
+    clearTimer();
+    const startTime = Date.now();
+    intervalRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const remaining = totalSeconds - elapsed;
+      if (remaining <= 0) {
+        setTimerSeconds(0);
+        setIsTimerRunning(false);
+        setTimerFinished(true);
+        clearTimer();
+        if (soundEnabled) {
+          playTimerEndSound();
+        }
+      } else {
+        setTimerSeconds(remaining);
+      }
+    }, 1000);
+  };
+
+  const pauseTimer = () => {
+    setIsTimerRunning(false);
+    clearTimer();
+  };
+
+  const resumeTimer = () => {
+    if (timerSeconds === null || timerSeconds <= 0) return;
+    setIsTimerRunning(true);
+    const remaining = timerSeconds;
+    const startTime = Date.now();
+    clearTimer();
+    intervalRef.current = setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startTime) / 1000);
+      const left = remaining - elapsed;
+      if (left <= 0) {
+        setTimerSeconds(0);
+        setIsTimerRunning(false);
+        setTimerFinished(true);
+        clearTimer();
+        if (soundEnabled) {
+          playTimerEndSound();
+        }
+      } else {
+        setTimerSeconds(left);
+      }
+    }, 1000);
+  };
+
+  const resetTimer = () => {
+    clearTimer();
+    setTimerSeconds(null);
+    setIsTimerRunning(false);
+    setTimerFinished(false);
+  };
 
   const handleToggle = () => {
     if (!completed) {
       setJustCompleted(true);
       setTimeout(() => setJustCompleted(false), 600);
+      // 完了時にタイマーをリセット
+      resetTimer();
     }
     onToggle();
   };
 
+  const timerProgress = routine.estimatedMinutes && timerSeconds !== null
+    ? 1 - timerSeconds / (routine.estimatedMinutes * 60)
+    : 0;
+
   return (
     <div
-      className={`rounded-xl p-4 shadow-sm border transition-all duration-300 ${
-        justCompleted ? 'scale-[1.02] bg-green-50 dark:bg-green-900/20' : 'bg-white dark:bg-gray-800'
-      } ${completed ? 'opacity-60' : ''}`}
-      style={{ borderLeftColor: '#8B5CF6', borderLeftWidth: '4px' }}
+      className={`rounded-2xl px-4 py-3.5 border transition-all duration-300 ${
+        justCompleted ? 'animate-completion-flash' : ''
+      } ${completed ? 'opacity-50' : ''} ${timerFinished ? 'ring-2 ring-orange-300 dark:ring-orange-600' : ''} bg-white dark:bg-gray-800/60 border-[var(--border)]`}
+      style={{ boxShadow: 'var(--card-shadow)' }}
     >
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-3.5">
+        {/* ルーティンドット（紫色） */}
+        <span className="w-1.5 h-1.5 rounded-full flex-shrink-0 bg-purple-400" />
+
+        {/* チェックボタン */}
         <button
           onClick={handleToggle}
-          className={`w-6 h-6 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
+          aria-label={completed ? `${routine.title}を未完了にする` : `${routine.title}を完了にする`}
+          className={`w-[22px] h-[22px] rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all duration-300 active:scale-90 ${
             completed
-              ? 'bg-green-500 border-green-500 scale-110'
+              ? 'bg-green-500 border-green-500'
               : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
-          }`}
+          } ${justCompleted ? 'animate-ripple' : ''}`}
         >
           {completed && (
-            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-3 h-3 text-white animate-check-pop" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           )}
         </button>
 
+        {/* タイトル */}
         <div
           className="flex-1 min-w-0 cursor-pointer"
           onClick={() => setIsExpanded(!isExpanded)}
         >
-          <p className={`text-sm font-medium transition-all duration-300 ${
+          <p className={`text-[15px] leading-snug transition-all duration-300 ${
             completed
               ? 'line-through text-gray-400 dark:text-gray-500'
-              : 'text-gray-800 dark:text-gray-100'
+              : 'text-gray-800 dark:text-gray-100 font-medium'
           }`}>
             {routine.title}
           </p>
         </div>
 
         <div className="flex items-center gap-1.5 flex-shrink-0">
-          {routine.estimatedMinutes && (
-            <span className="text-xs text-purple-500 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">
-              🔄 {routine.estimatedMinutes}分
+          {/* タイマー表示 */}
+          {timerSeconds !== null && (
+            <span className={`text-xs font-mono font-bold px-2 py-0.5 rounded-full ${
+              timerFinished
+                ? 'text-orange-600 bg-orange-50 dark:bg-orange-900/30 dark:text-orange-400'
+                : timerSeconds <= 60
+                  ? 'text-red-500 bg-red-50 dark:bg-red-900/30'
+                  : 'text-[var(--accent)] bg-[var(--accent-light)]'
+            }`}>
+              {timerFinished ? '完了!' : formatTime(timerSeconds)}
+            </span>
+          )}
+          {/* タイマーボタン or 目安時間 */}
+          {routine.estimatedMinutes && !completed && (
+            timerSeconds === null ? (
+              <button
+                onClick={startTimer}
+                className="text-xs text-purple-500 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full hover:bg-purple-100 dark:hover:bg-purple-900/50 active:scale-95 transition-all"
+                aria-label="タイマーを開始"
+              >
+                {routine.estimatedMinutes}分
+              </button>
+            ) : (
+              <div className="flex items-center gap-1">
+                {!timerFinished && (
+                  <button
+                    onClick={isTimerRunning ? pauseTimer : resumeTimer}
+                    className="w-6 h-6 flex items-center justify-center rounded-full active:scale-95 transition-all bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                    aria-label={isTimerRunning ? 'タイマーを一時停止' : 'タイマーを再開'}
+                  >
+                    {isTimerRunning ? (
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>
+                    ) : (
+                      <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+                    )}
+                  </button>
+                )}
+                <button
+                  onClick={resetTimer}
+                  className="w-6 h-6 flex items-center justify-center rounded-full active:scale-95 transition-all bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400"
+                  aria-label="タイマーをリセット"
+                >
+                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+              </div>
+            )
+          )}
+          {routine.estimatedMinutes && completed && (
+            <span className="text-xs text-purple-400 bg-purple-50 dark:bg-purple-900/30 px-2 py-0.5 rounded-full">
+              {routine.estimatedMinutes}分
             </span>
           )}
         </div>
       </div>
 
+      {/* タイマープログレスバー */}
+      {timerSeconds !== null && !timerFinished && routine.estimatedMinutes && (
+        <div className="mt-2.5 w-full bg-gray-100 dark:bg-gray-700 rounded-full h-1 overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-1000 ease-linear"
+            style={{
+              width: `${timerProgress * 100}%`,
+              backgroundColor: timerSeconds <= 60 ? '#EF4444' : '#8B5CF6',
+            }}
+          />
+        </div>
+      )}
+
       {isExpanded && (
-        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-700">
+        <div className="mt-3 pt-3 border-t border-gray-100/80 dark:border-gray-700/50">
           <div className="flex gap-2 justify-end">
             <button
               onClick={() => onEdit(routine)}
-              className="text-xs text-blue-500 hover:text-blue-700 px-3 py-1.5 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+              className="text-xs text-[var(--accent)] px-3 py-1.5 rounded-lg hover:bg-[var(--accent-light)] active:scale-95 transition-all"
             >
               編集
             </button>
             <button
               onClick={() => routine.id !== undefined && onDelete(routine.id)}
-              className="text-xs text-red-400 hover:text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+              className="text-xs text-gray-400 hover:text-red-400 px-3 py-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 active:scale-95 transition-all"
             >
               削除
             </button>
@@ -108,13 +266,15 @@ function RoutineItem({ routine, completed, onToggle, onEdit, onDelete }: Routine
   );
 }
 
-export default function TodayView({ onEditTask, onEditRoutine, settings }: TodayViewProps) {
+export default function TodayView({ onEditTask, onEditRoutine, onAddSubtask, settings }: TodayViewProps) {
   const [allDoneChoice, setAllDoneChoice] = useState<'none' | 'more' | 'rest'>('none');
   const today = new Date().toISOString().split('T')[0];
   const dayOfWeek = new Date().getDay(); // 0=日, 1=月, ...
 
   const tasks = useLiveQuery(
     () => db.tasks.filter((t) => {
+      // サブタスクは除外（親タスク内で表示される）
+      if (t.parentId) return false;
       if (t.completed && t.completedAt) {
         const completedDate = t.completedAt.split('T')[0];
         if (completedDate === today) return true;
@@ -209,6 +369,11 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
   };
 
   const deleteTask = async (id: number) => {
+    const subtasks = await db.tasks.where('parentId').equals(id).toArray();
+    const subtaskIds = subtasks.map(s => s.id!).filter(Boolean);
+    if (subtaskIds.length > 0) {
+      await db.tasks.bulkDelete(subtaskIds);
+    }
     await db.tasks.delete(id);
   };
 
@@ -254,7 +419,7 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
   return (
     <div className="space-y-4">
       <div className="text-center py-2">
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
+        <p className="text-gray-400 dark:text-gray-500 text-sm tracking-wide">
           {new Date().toLocaleDateString('ja-JP', {
             year: 'numeric',
             month: 'long',
@@ -268,48 +433,60 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
 
       {/* 全完了演出 */}
       {allDone && allDoneChoice === 'none' && (
-        <div className="bg-green-50 dark:bg-green-900/20 rounded-xl p-6 text-center border border-green-100 dark:border-green-800 animate-fade-in">
-          <p className="text-4xl mb-3">🎉</p>
-          <p className="text-green-700 dark:text-green-300 font-bold text-lg">全部おわったね！</p>
-          <p className="text-green-600 dark:text-green-400 text-sm mt-1 mb-4">おつかれさま！</p>
+        <div className="relative bg-white dark:bg-gray-800/60 rounded-2xl p-8 text-center border border-green-100/60 dark:border-green-800/30 animate-bounce-in overflow-hidden"
+          style={{ boxShadow: 'var(--card-shadow)' }}
+        >
+          <Confetti />
+          <p className="text-4xl mb-4">🎉</p>
+          <p className="text-gray-800 dark:text-gray-100 font-semibold text-lg">全部おわった！</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-1 mb-6">今日もおつかれさま</p>
           <div className="flex gap-3 justify-center">
             <button
               onClick={() => setAllDoneChoice('more')}
-              className="px-4 py-2.5 bg-blue-500 text-white text-sm rounded-xl hover:bg-blue-600 transition-colors font-medium"
+              className="px-5 py-2.5 bg-[var(--accent)] text-white text-sm rounded-xl hover:opacity-90 active:scale-95 transition-all font-medium"
+              style={{ boxShadow: '0 2px 8px rgba(59,130,246,0.3)' }}
             >
-              もうちょっとやってみる
+              もうちょっとやる
             </button>
             <button
               onClick={() => setAllDoneChoice('rest')}
-              className="px-4 py-2.5 bg-white dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm rounded-xl hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors border border-gray-200 dark:border-gray-600 font-medium"
+              className="px-5 py-2.5 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 text-sm rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 active:scale-95 transition-all font-medium"
             >
-              今日はゆっくりする
+              ゆっくりする
             </button>
           </div>
         </div>
       )}
 
       {allDone && allDoneChoice === 'rest' && (
-        <div className="bg-purple-50 dark:bg-purple-900/20 rounded-xl p-6 text-center border border-purple-100 dark:border-purple-800 animate-fade-in">
-          <p className="text-4xl mb-3">🌙</p>
-          <p className="text-purple-700 dark:text-purple-300 font-bold">今日やること全部やりきったね</p>
-          <p className="text-purple-600 dark:text-purple-400 text-sm mt-1">しっかり休むのも大事だよ</p>
+        <div className="bg-white dark:bg-gray-800/60 rounded-2xl p-8 text-center border border-[var(--border)] animate-bounce-in"
+          style={{ boxShadow: 'var(--card-shadow)' }}
+        >
+          <p className="text-3xl mb-3">🌙</p>
+          <p className="text-gray-800 dark:text-gray-100 font-semibold">おつかれさま</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">しっかり休もう</p>
         </div>
       )}
 
       {allDone && allDoneChoice === 'more' && (
-        <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-6 text-center border border-blue-100 dark:border-blue-800 animate-fade-in">
-          <p className="text-4xl mb-3">✨</p>
-          <p className="text-blue-700 dark:text-blue-300 font-bold">いいね！</p>
-          <p className="text-blue-600 dark:text-blue-400 text-sm mt-1">ボーナスタスクはAI機能実装後に提案できるようになるよ</p>
+        <div className="bg-white dark:bg-gray-800/60 rounded-2xl p-8 text-center border border-[var(--border)] animate-bounce-in"
+          style={{ boxShadow: 'var(--card-shadow)' }}
+        >
+          <p className="text-3xl mb-3">💪</p>
+          <p className="text-gray-800 dark:text-gray-100 font-semibold">いいね！</p>
+          <p className="text-gray-400 dark:text-gray-500 text-sm mt-1">ボーナスタスクはAI機能実装後に提案できるよ</p>
         </div>
       )}
 
       {totalItems === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-4xl mb-3">✨</p>
-          <p className="text-gray-500 dark:text-gray-400 text-sm">今日のタスク・ルーティンはまだないよ</p>
-          <p className="text-gray-400 dark:text-gray-500 text-xs mt-1">右下の＋から追加してみよう</p>
+        <div className="text-center py-20">
+          <div className="w-16 h-16 mx-auto mb-5 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
+            <svg className="w-7 h-7 text-gray-300 dark:text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+          </div>
+          <p className="text-gray-500 dark:text-gray-400 text-sm font-medium">今日のタスクはまだないよ</p>
+          <p className="text-gray-400 dark:text-gray-500 text-xs mt-2">右下の＋から追加してみよう</p>
         </div>
       ) : (
         <div className="space-y-1">
@@ -321,10 +498,9 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
 
             return (
               <div key={block.key}>
-                <div className="flex items-center gap-2 py-3 px-1">
-                  <span className="text-base">{block.emoji}</span>
-                  <span className="text-sm font-bold text-gray-600 dark:text-gray-300">{block.label}</span>
-                  <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+                <div className="flex items-center gap-2.5 py-3 px-1">
+                  <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">{block.label}</span>
+                  <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
                 </div>
                 <div className="space-y-2">
                   {blockRoutines.map((routine) => (
@@ -335,6 +511,7 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
                       onToggle={() => routine.id !== undefined && toggleRoutine(routine.id)}
                       onEdit={onEditRoutine}
                       onDelete={deleteRoutine}
+                      soundEnabled={settings?.soundEnabled !== false}
                     />
                   ))}
                   {blockTasks.map((task) => (
@@ -345,6 +522,8 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
                       onToggle={toggleTask}
                       onDelete={deleteTask}
                       onEdit={onEditTask}
+                      onAddSubtask={onAddSubtask}
+                      settings={settings}
                     />
                   ))}
                 </div>
@@ -355,10 +534,9 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
           {/* いつでもセクション */}
           {unblockedTasks.length > 0 && (
             <div>
-              <div className="flex items-center gap-2 py-3 px-1">
-                <span className="text-base">📌</span>
-                <span className="text-sm font-bold text-gray-600 dark:text-gray-300">いつでも</span>
-                <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+              <div className="flex items-center gap-2.5 py-3 px-1">
+                <span className="text-sm font-semibold text-gray-500 dark:text-gray-400">いつでも</span>
+                <div className="flex-1 h-px bg-gray-100 dark:bg-gray-800" />
               </div>
               <div className="space-y-2">
                 {unblockedTasks.map((task) => (
@@ -369,6 +547,8 @@ export default function TodayView({ onEditTask, onEditRoutine, settings }: Today
                     onToggle={toggleTask}
                     onDelete={deleteTask}
                     onEdit={onEditTask}
+                    onAddSubtask={onAddSubtask}
+                    settings={settings}
                   />
                 ))}
               </div>

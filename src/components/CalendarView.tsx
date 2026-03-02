@@ -11,7 +11,7 @@ export default function CalendarView() {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  const tasks = useLiveQuery(() => db.tasks.filter((t) => !!t.dueDate).toArray());
+  const tasks = useLiveQuery(() => db.tasks.filter((t) => !!t.dueDate || !!t.startDate).toArray());
   const categories = useLiveQuery(() => db.categories.toArray());
 
   if (!tasks || !categories) {
@@ -24,7 +24,12 @@ export default function CalendarView() {
 
   const getTasksForDate = (day: number) => {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-    return tasks.filter((t) => t.dueDate === dateStr);
+    return tasks.filter((t) => {
+      if (t.startDate && t.dueDate) {
+        return dateStr >= t.startDate && dateStr <= t.dueDate;
+      }
+      return t.dueDate === dateStr || t.startDate === dateStr;
+    });
   };
 
   const getCategoryColor = (categoryId: number) => {

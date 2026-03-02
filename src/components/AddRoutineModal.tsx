@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import type { Routine, TimeBlock } from '@/types';
 
 interface AddRoutineModalProps {
@@ -39,6 +39,17 @@ export default function AddRoutineModal({ isOpen, onClose, onSave, editingRoutin
     }
   }, [editingRoutine, isOpen]);
 
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, handleKeyDown]);
+
   if (!isOpen) return null;
 
   const toggleDay = (day: number) => {
@@ -61,12 +72,12 @@ export default function AddRoutineModal({ isOpen, onClose, onSave, editingRoutin
   };
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-end sm:items-center justify-center animate-overlay" role="dialog" aria-modal="true" aria-labelledby="routine-modal-title" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 max-h-[85vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 max-h-[85vh] overflow-y-auto animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">
+        <h2 id="routine-modal-title" className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">
           {editingRoutine ? 'ルーティンを編集' : 'ルーティンを追加'}
         </h2>
 

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 
@@ -11,6 +12,17 @@ interface WeeklyReviewProps {
 export default function WeeklyReview({ isOpen, onClose }: WeeklyReviewProps) {
   const reflections = useLiveQuery(() => db.reflections.orderBy('date').reverse().toArray());
   const tasks = useLiveQuery(() => db.tasks.toArray());
+
+  const handleKeyDown = useCallback((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+  }, [onClose]);
+
+  useEffect(() => {
+    if (isOpen) {
+      document.addEventListener('keydown', handleKeyDown);
+      return () => document.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [isOpen, handleKeyDown]);
 
   if (!isOpen || !reflections || !tasks) return null;
 
@@ -37,12 +49,12 @@ export default function WeeklyReview({ isOpen, onClose }: WeeklyReviewProps) {
   const recentNotes = reflections.filter((r) => r.note).slice(0, 7);
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center animate-overlay" role="dialog" aria-modal="true" aria-labelledby="review-modal-title" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 w-full max-w-sm mx-4 rounded-2xl p-6 max-h-[80vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-800 w-full max-w-sm mx-4 rounded-2xl p-6 max-h-[80vh] overflow-y-auto animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-lg font-bold text-gray-800 dark:text-gray-100 text-center mb-6">ふりかえり</h2>
+        <h2 id="review-modal-title" className="text-lg font-bold text-gray-800 dark:text-gray-100 text-center mb-6">ふりかえり</h2>
 
         {/* 今週 */}
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-xl p-4 mb-4">

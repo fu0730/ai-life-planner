@@ -3,13 +3,24 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #f8f9fa;
+  --background: #fafafa;
   --foreground: #171717;
+  --accent: #3B82F6;
+  --accent-light: #EFF6FF;
+  --border: #f0f0f0;
+  --border-dark: #1f2937;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  --card-shadow-hover: 0 2px 8px rgba(0,0,0,0.06);
 }
 
 .dark {
   --background: #111827;
   --foreground: #f3f4f6;
+  --accent: #60A5FA;
+  --accent-light: rgba(59, 130, 246, 0.1);
+  --border: #1f2937;
+  --card-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  --card-shadow-hover: 0 2px 8px rgba(0,0,0,0.3);
 }
 
 body {
@@ -43,4 +54,132 @@ body {
 
 .animate-fade-in {
   animation: fadeIn 0.4s ease-out;
+}
+
+/* モーダル背景フェードイン */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.animate-overlay {
+  animation: overlayFadeIn 0.2s ease-out;
+}
+
+/* モーダルスライドアップ */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-slide-up {
+  animation: slideUp 0.3s ease-out;
+}
+
+/* 設定パネルスライドイン */
+@keyframes slideInRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slide-in-right {
+  animation: slideInRight 0.3s ease-out;
+}
+
+/* 紙吹雪 */
+@keyframes confettiFall {
+  0% {
+    opacity: 1;
+    transform: translateY(0) translateX(0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(350px) translateX(var(--drift, 0px)) rotate(720deg);
+  }
+}
+
+.animate-confetti-fall {
+  animation: confettiFall var(--duration, 2s) ease-out forwards;
+}
+
+/* 全完了カードのバウンス */
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { opacity: 1; transform: scale(1.05); }
+  70% { transform: scale(0.95); }
+  100% { transform: scale(1); }
+}
+
+.animate-bounce-in {
+  animation: bounceIn 0.6s ease-out;
+}
+
+/* 進捗バー100%のパルス */
+@keyframes progressPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+}
+
+.animate-progress-pulse {
+  animation: progressPulse 2s ease-in-out infinite;
+}
+
+/* 進捗バーのキラキラ */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(
+    90deg,
+    #10B981 0%,
+    #34D399 40%,
+    #6EE7B7 50%,
+    #34D399 60%,
+    #10B981 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 2s ease-in-out infinite;
+}
+
+/* チェックマーク スケール+フェードイン */
+@keyframes checkPop {
+  0% { transform: scale(0); opacity: 0; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.animate-check-pop {
+  animation: checkPop 0.3s ease-out forwards;
+}
+
+/* 完了時のカード背景フラッシュ */
+@keyframes completionFlash {
+  0% { background-color: rgba(16, 185, 129, 0.12); }
+  100% { background-color: transparent; }
+}
+
+.animate-completion-flash {
+  animation: completionFlash 0.6s ease-out forwards;
+}
+
+/* チェックボタンのripple効果 */
+@keyframes ripple {
+  0% {
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4);
+  }
+  100% {
+    box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
+  }
+}
+
+.animate-ripple {
+  animation: ripple 0.4s ease-out;
+}
+
+/* 円形プログレスのストロークアニメーション */
+@keyframes strokeDraw {
+  from { stroke-dashoffset: var(--circumference); }
+  to { stroke-dashoffset: var(--target-offset); }
 }
