@@ -6,6 +6,7 @@ export interface Category {
   color: string;
   order: number;
   type: 'task' | 'routine' | 'checklist';
+  parentId?: number;
 }
 
 export interface Task {
@@ -19,6 +20,8 @@ export interface Task {
   dueDate?: string;
   block?: TimeBlock;
   parentId?: number;
+  isFolder?: boolean;
+  calendarDisplay?: 'bar' | 'background';
   createdAt: string;
   completedAt?: string;
 }
@@ -49,10 +52,19 @@ export interface DailyReflection {
   createdAt: string;
 }
 
+export type TimeMode = 'fixed' | 'by-day' | 'ai';
+
+export interface DaySchedule {
+  wakeUpTime: string | null;  // null = AIお任せ
+  bedTime: string | null;
+}
+
 export interface UserProfile {
   id?: number;
-  wakeUpTime: string;       // "07:00"
+  wakeUpTime: string;       // "07:00" (fixedモード用 / デフォルト値)
   bedTime: string;          // "23:00"
+  timeMode?: TimeMode;      // 'fixed' | 'by-day' | 'ai'
+  daySchedules?: Record<number, DaySchedule>;  // 0=日〜6=土
   dreams?: string;          // やりたいこと・夢
   idealSelf?: string;       // なりたい自分
   createdAt: string;
@@ -63,6 +75,7 @@ export interface Settings {
   theme: 'light' | 'dark';
   soundEnabled: boolean;
   sortBy: 'priority' | 'dueDate' | 'createdAt';
+  viewMode: 'list' | 'grid';
   setupCompleted: boolean;
 }
 

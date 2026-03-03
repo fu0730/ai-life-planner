@@ -9,6 +9,7 @@ import type { AIAction } from '@/lib/ai-actions';
 interface ChatViewProps {
   isOpen: boolean;
   onClose: () => void;
+  initialMessage?: string;
 }
 
 const SUGGEST_CHIPS = [
@@ -17,7 +18,7 @@ const SUGGEST_CHIPS = [
   'ルーティンを見直して',
 ];
 
-export default function ChatView({ isOpen, onClose }: ChatViewProps) {
+export default function ChatView({ isOpen, onClose, initialMessage }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
@@ -51,10 +52,19 @@ export default function ChatView({ isOpen, onClose }: ChatViewProps) {
 
   // 開いたときにinputにフォーカス
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !initialMessage) {
       setTimeout(() => inputRef.current?.focus(), 300);
     }
-  }, [isOpen]);
+  }, [isOpen, initialMessage]);
+
+  // initialMessageが指定されたら自動送信
+  const initialMessageSentRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (isOpen && initialMessage && initialMessageSentRef.current !== initialMessage) {
+      initialMessageSentRef.current = initialMessage;
+      setTimeout(() => handleSend(initialMessage), 400);
+    }
+  }, [isOpen, initialMessage]);
 
   const gatherContext = async () => {
     const today = new Date().toISOString().split('T')[0];

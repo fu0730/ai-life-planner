@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import Header from '@/components/layout/Header';
 import TabBar from '@/components/layout/TabBar';
 import TodayView from '@/components/TodayView';
@@ -8,7 +8,9 @@ import TasksView from '@/components/TasksView';
 import CalendarView from '@/components/CalendarView';
 import AddTaskModal from '@/components/AddTaskModal';
 import AddRoutineModal from '@/components/AddRoutineModal';
+import QuickAddPanel from '@/components/QuickAddPanel';
 import SettingsView from '@/components/SettingsView';
+import ProfileView from '@/components/ProfileView';
 import ReflectionModal from '@/components/ReflectionModal';
 import WeeklyReview from '@/components/WeeklyReview';
 import ChatView from '@/components/ChatView';
@@ -19,28 +21,29 @@ import { getSettings } from '@/lib/settings';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Task, Routine, Settings } from '@/types';
 
-type Tab = 'today' | 'tasks' | 'calendar';
+type Tab = 'today' | 'tasks';
 
 const tabTitles: Record<Tab, string> = {
   today: '今日',
   tasks: 'タスク',
-  calendar: 'カレンダー',
 };
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
-  const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
+  const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isReflectionOpen, setIsReflectionOpen] = useState(false);
   const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>(undefined);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [parentTask, setParentTask] = useState<Task | null>(null);
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [settings, setSettings] = useState<Settings | undefined>(undefined);
-  const addMenuRef = useRef<HTMLDivElement>(null);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
 
@@ -70,18 +73,6 @@ export default function Home() {
     }
   }, [settings]);
 
-  // メニュー外クリックで閉じる
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (addMenuRef.current && !addMenuRef.current.contains(e.target as Node)) {
-        setIsAddMenuOpen(false);
-      }
-    };
-    if (isAddMenuOpen) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
-    }
-  }, [isAddMenuOpen]);
 
   const handleSetupComplete = () => {
     getSettings().then(setSettings);
@@ -192,14 +183,20 @@ export default function Home() {
   };
 
   const handleOpenAddMenu = () => {
-    if (activeTab === 'today') {
-      setIsAddMenuOpen((prev) => !prev);
-    } else {
-      // タスクタブでは直接タスク追加
-      setEditingTask(null);
-      setParentTask(null);
-      setIsTaskModalOpen(true);
-    }
+    // 今日タブ・タスクタブ共通でクイック追加パネルを開く
+    setIsQuickAddOpen(true);
+  };
+
+  const handleQuickAdd = async (data: { title: string; categoryId: number; startDate?: string; dueDate?: string }) => {
+    await db.tasks.add({
+      title: data.title,
+      categoryId: data.categoryId,
+      priority: 'medium',
+      startDate: data.startDate,
+      dueDate: data.dueDate,
+      completed: false,
+      createdAt: new Date().toISOString(),
+    });
   };
 
   return (
@@ -207,8 +204,10 @@ export default function Home() {
       <Header
         title={tabTitles[activeTab]}
         onSettingsClick={() => setIsSettingsOpen(true)}
+        onProfileClick={() => setIsProfileOpen(true)}
         onReflectionClick={() => setIsReflectionOpen(true)}
         onReviewClick={() => setIsReviewOpen(true)}
+        onCalendarClick={() => setIsCalendarOpen(true)}
       />
 
       <main className="pt-14 pb-20 px-4 max-w-lg mx-auto">
@@ -222,7 +221,6 @@ export default function Home() {
             />
           )}
           {activeTab === 'tasks' && <TasksView onEditTask={handleEditTask} onAddSubtask={handleAddSubtask} settings={settings} />}
-          {activeTab === 'calendar' && <CalendarView />}
         </div>
       </main>
 
@@ -240,58 +238,18 @@ export default function Home() {
         </button>
       )}
 
-      {activeTab !== 'calendar' && (
-        <div ref={addMenuRef} className="fixed bottom-20 right-4 z-10">
-          {/* 追加メニュー（今日タブ時） */}
-          {isAddMenuOpen && (
-            <div className="absolute bottom-14 right-0 bg-white dark:bg-gray-800 rounded-2xl border border-[var(--border)] overflow-hidden mb-2 min-w-[160px]"
-              style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.08)' }}
-            >
-              <button
-                onClick={() => {
-                  setIsAddMenuOpen(false);
-                  setEditingTask(null);
-                  setParentTask(null);
-                  setIsTaskModalOpen(true);
-                }}
-                className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-2.5"
-              >
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15a2.25 2.25 0 012.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-                </svg>
-                タスクを追加
-              </button>
-              <div className="h-px bg-gray-100 dark:bg-gray-700/50" />
-              <button
-                onClick={() => {
-                  setIsAddMenuOpen(false);
-                  setEditingRoutine(null);
-                  setIsRoutineModalOpen(true);
-                }}
-                className="w-full px-4 py-3 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors flex items-center gap-2.5"
-              >
-                <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992" />
-                </svg>
-                ルーティンを追加
-              </button>
-            </div>
-          )}
-
+      <div className="fixed bottom-20 right-4 z-10">
           <button
             onClick={handleOpenAddMenu}
-            aria-label={isAddMenuOpen ? 'メニューを閉じる' : '追加メニューを開く'}
-            className={`w-12 h-12 bg-[var(--accent)] text-white rounded-full hover:opacity-90 active:scale-95 transition-all flex items-center justify-center ${
-              isAddMenuOpen ? 'rotate-45' : ''
-            }`}
+            aria-label="タスクを追加"
+            className="w-12 h-12 bg-[var(--accent)] text-white rounded-full hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
             style={{ boxShadow: '0 2px 12px rgba(59,130,246,0.3)' }}
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
             </svg>
           </button>
-        </div>
-      )}
+      </div>
 
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
@@ -324,6 +282,16 @@ export default function Home() {
         settings={settings}
       />
 
+      <ProfileView
+        isOpen={isProfileOpen}
+        onClose={() => setIsProfileOpen(false)}
+        onOpenChat={(message) => {
+          setIsProfileOpen(false);
+          setChatInitialMessage(message);
+          setIsChatOpen(true);
+        }}
+      />
+
       <ReflectionModal
         isOpen={isReflectionOpen}
         onClose={() => setIsReflectionOpen(false)}
@@ -336,7 +304,27 @@ export default function Home() {
 
       <ChatView
         isOpen={isChatOpen}
-        onClose={() => setIsChatOpen(false)}
+        onClose={() => {
+          setIsChatOpen(false);
+          setChatInitialMessage(undefined);
+        }}
+        initialMessage={chatInitialMessage}
+      />
+
+      <CalendarView
+        isOpen={isCalendarOpen}
+        onClose={() => setIsCalendarOpen(false)}
+      />
+
+      <QuickAddPanel
+        isOpen={isQuickAddOpen}
+        onClose={() => setIsQuickAddOpen(false)}
+        onAdd={handleQuickAdd}
+        onOpenRoutineModal={() => {
+          setEditingRoutine(null);
+          setIsRoutineModalOpen(true);
+        }}
+        categories={categories || []}
       />
     </div>
   );

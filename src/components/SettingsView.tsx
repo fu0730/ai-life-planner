@@ -23,6 +23,8 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
   const [newCategoryName, setNewCategoryName] = useState('');
   const [newCategoryColor, setNewCategoryColor] = useState('#3B82F6');
   const [showAddCategory, setShowAddCategory] = useState(false);
+  const [addingSubTo, setAddingSubTo] = useState<number | null>(null);
+  const [newSubName, setNewSubName] = useState('');
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
 
@@ -71,6 +73,44 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
     const tasksInCategory = await db.tasks.where('categoryId').equals(id).count();
     if (tasksInCategory > 0) {
       alert(`このカテゴリには${tasksInCategory}個のタスクがあります。先にタスクを移動してください。`);
+      return;
+    }
+    // サブカテゴリも確認
+    const subs = categories?.filter(c => c.parentId === id) || [];
+    for (const sub of subs) {
+      const subTasks = await db.tasks.where('categoryId').equals(sub.id!).count();
+      if (subTasks > 0) {
+        alert(`サブカテゴリ「${sub.name}」にタスクがあります。先にタスクを移動してください。`);
+        return;
+      }
+    }
+    // サブカテゴリも一緒に削除
+    const subIds = subs.map(s => s.id!).filter(Boolean);
+    if (subIds.length > 0) await db.categories.bulkDelete(subIds);
+    await db.categories.delete(id);
+  };
+
+  const handleAddSubCategory = async (parentId: number) => {
+    if (!newSubName.trim()) return;
+    const parent = categories?.find(c => c.id === parentId);
+    if (!parent) return;
+    const subs = categories?.filter(c => c.parentId === parentId) || [];
+    const maxOrder = subs.length > 0 ? Math.max(...subs.map(s => s.order)) : -1;
+    await db.categories.add({
+      name: newSubName.trim(),
+      color: parent.color,
+      order: maxOrder + 1,
+      type: parent.type,
+      parentId,
+    });
+    setNewSubName('');
+    setAddingSubTo(null);
+  };
+
+  const handleDeleteSubCategory = async (id: number) => {
+    const tasksInCategory = await db.tasks.where('categoryId').equals(id).count();
+    if (tasksInCategory > 0) {
+      alert(`このサブカテゴリにはタスクがあります。先にタスクを移動してください。`);
       return;
     }
     await db.categories.delete(id);
@@ -188,67 +228,131 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
             )}
 
             <div className="space-y-2">
-              {categories?.map((cat) => (
-                <div key={cat.id} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
-                  {editingCategory && editingCategory.id === cat.id ? (
-                    <div>
-                      <input
-                        type="text"
-                        value={editingCategory.name}
-                        onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm mb-2 bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                      />
-                      <div className="flex flex-wrap gap-2 mb-2">
-                        {PRESET_COLORS.map((color) => (
+              {categories?.filter(c => !c.parentId).map((cat) => {
+                const subs = categories?.filter(c => c.parentId === cat.id) || [];
+                return (
+                  <div key={cat.id} className="bg-gray-50 dark:bg-gray-800 rounded-xl p-3">
+                    {editingCategory && editingCategory.id === cat.id ? (
+                      <div>
+                        <input
+                          type="text"
+                          value={editingCategory.name}
+                          onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm mb-2 bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        />
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {PRESET_COLORS.map((color) => (
+                            <button
+                              key={color}
+                              onClick={() => setEditingCategory({ ...editingCategory, color })}
+                              className={`w-6 h-6 rounded-full transition-transform ${
+                                editingCategory.color === color ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : ''
+                              }`}
+                              style={{ backgroundColor: color }}
+                            />
+                          ))}
+                        </div>
+                        <div className="flex gap-2">
                           <button
-                            key={color}
-                            onClick={() => setEditingCategory({ ...editingCategory, color })}
-                            className={`w-6 h-6 rounded-full transition-transform ${
-                              editingCategory.color === color ? 'scale-125 ring-2 ring-offset-2 ring-gray-400' : ''
-                            }`}
-                            style={{ backgroundColor: color }}
-                          />
-                        ))}
+                            onClick={() => setEditingCategory(null)}
+                            className="flex-1 py-1.5 text-xs text-gray-500 bg-gray-200 dark:bg-gray-600 rounded-lg"
+                          >
+                            キャンセル
+                          </button>
+                          <button
+                            onClick={() => handleUpdateCategory(cat.id!, { name: editingCategory.name, color: editingCategory.color })}
+                            className="flex-1 py-1.5 text-xs text-white bg-blue-500 rounded-lg"
+                          >
+                            保存
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => setEditingCategory(null)}
-                          className="flex-1 py-1.5 text-xs text-gray-500 bg-gray-200 dark:bg-gray-600 rounded-lg"
-                        >
-                          キャンセル
-                        </button>
-                        <button
-                          onClick={() => handleUpdateCategory(cat.id!, { name: editingCategory.name, color: editingCategory.color })}
-                          className="flex-1 py-1.5 text-xs text-white bg-blue-500 rounded-lg"
-                        >
-                          保存
-                        </button>
+                    ) : (
+                      <div>
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
+                            <span className="text-sm text-gray-700 dark:text-gray-300">{cat.name}</span>
+                          </div>
+                          <div className="flex gap-1">
+                            <button
+                              onClick={() => { setAddingSubTo(addingSubTo === cat.id ? null : cat.id!); setNewSubName(''); }}
+                              className="text-xs text-gray-400 hover:text-green-500 px-2 py-1"
+                            >
+                              +小分類
+                            </button>
+                            <button
+                              onClick={() => setEditingCategory(cat)}
+                              className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1"
+                            >
+                              編集
+                            </button>
+                            <button
+                              onClick={() => handleDeleteCategory(cat.id!)}
+                              className="text-xs text-gray-400 hover:text-red-500 px-2 py-1"
+                            >
+                              削除
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* サブカテゴリ一覧 */}
+                        {subs.length > 0 && (
+                          <div className="mt-2 ml-7 space-y-1">
+                            {subs.map(sub => (
+                              <div key={sub.id} className="flex items-center justify-between py-1">
+                                {editingCategory && editingCategory.id === sub.id ? (
+                                  <div className="flex-1">
+                                    <input
+                                      type="text"
+                                      value={editingCategory.name}
+                                      onChange={(e) => setEditingCategory({ ...editingCategory, name: e.target.value })}
+                                      className="w-full px-2 py-1 border border-gray-200 dark:border-gray-600 rounded text-xs mb-1 bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                                    />
+                                    <div className="flex gap-1">
+                                      <button onClick={() => setEditingCategory(null)} className="flex-1 py-1 text-[10px] text-gray-500 bg-gray-200 dark:bg-gray-600 rounded">キャンセル</button>
+                                      <button onClick={() => handleUpdateCategory(sub.id!, { name: editingCategory.name })} className="flex-1 py-1 text-[10px] text-white bg-blue-500 rounded">保存</button>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <span className="text-xs text-gray-500 dark:text-gray-400">└ {sub.name}</span>
+                                    <div className="flex gap-1">
+                                      <button onClick={() => setEditingCategory(sub)} className="text-[10px] text-gray-300 hover:text-blue-500 px-1">編集</button>
+                                      <button onClick={() => handleDeleteSubCategory(sub.id!)} className="text-[10px] text-gray-300 hover:text-red-500 px-1">削除</button>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* サブカテゴリ追加フォーム */}
+                        {addingSubTo === cat.id && (
+                          <div className="mt-2 ml-7 flex gap-2">
+                            <input
+                              type="text"
+                              value={newSubName}
+                              onChange={(e) => setNewSubName(e.target.value)}
+                              onKeyDown={(e) => { if (e.key === 'Enter') handleAddSubCategory(cat.id!); }}
+                              placeholder="小分類の名前"
+                              className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded text-xs bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                              autoFocus
+                            />
+                            <button
+                              onClick={() => handleAddSubCategory(cat.id!)}
+                              className="px-3 py-1.5 text-xs text-white bg-blue-500 rounded hover:bg-blue-600"
+                            >
+                              追加
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-4 h-4 rounded-full" style={{ backgroundColor: cat.color }} />
-                        <span className="text-sm text-gray-700 dark:text-gray-300">{cat.name}</span>
-                      </div>
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => setEditingCategory(cat)}
-                          className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1"
-                        >
-                          編集
-                        </button>
-                        <button
-                          onClick={() => handleDeleteCategory(cat.id!)}
-                          className="text-xs text-gray-400 hover:text-red-500 px-2 py-1"
-                        >
-                          削除
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         </div>

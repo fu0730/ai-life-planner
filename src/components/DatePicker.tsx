@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 
 interface DatePickerProps {
   value: string;
@@ -18,6 +18,32 @@ export default function DatePicker({ value, onChange, placeholder = '日付を�
     return new Date();
   });
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [popupStyle, setPopupStyle] = useState<React.CSSProperties>({});
+
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const rect = triggerRef.current.getBoundingClientRect();
+    const popupWidth = 280;
+    let left = rect.left + rect.width / 2 - popupWidth / 2;
+    // 画面端からはみ出さないように調整
+    if (left < 8) left = 8;
+    if (left + popupWidth > window.innerWidth - 8) left = window.innerWidth - 8 - popupWidth;
+
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const popupHeight = 320;
+    const showAbove = spaceBelow < popupHeight && rect.top > popupHeight;
+
+    setPopupStyle({
+      position: 'fixed',
+      left,
+      ...(showAbove
+        ? { bottom: window.innerHeight - rect.top + 4 }
+        : { top: rect.bottom + 4 }),
+      width: popupWidth,
+      zIndex: 9999,
+    });
+  }, []);
 
   // value変更時にviewDateも追従
   useEffect(() => {
@@ -78,8 +104,9 @@ export default function DatePicker({ value, onChange, placeholder = '日付を�
     <div className="relative" ref={containerRef}>
       {/* トリガーボタン */}
       <button
+        ref={triggerRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => { if (!isOpen) updatePosition(); setIsOpen(!isOpen); }}
         className={`w-full text-left border border-gray-200 dark:border-gray-600 rounded-${isSmall ? 'lg' : 'xl'} focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white dark:bg-gray-700 flex items-center justify-between ${
           isSmall ? 'px-2 py-1.5 text-xs' : 'px-3 py-3 text-sm'
         }`}
@@ -107,8 +134,8 @@ export default function DatePicker({ value, onChange, placeholder = '日付を�
       {/* カレンダーポップアップ */}
       {isOpen && (
         <div
-          className="absolute z-[60] mt-1 bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 p-3 w-[280px] left-1/2 -translate-x-1/2"
-          style={{ boxShadow: '0 4px 20px rgba(0,0,0,0.12)' }}
+          className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-600 p-3"
+          style={{ ...popupStyle, boxShadow: '0 4px 20px rgba(0,0,0,0.15)' }}
         >
           {/* ヘッダー */}
           <div className="flex items-center justify-between mb-2">

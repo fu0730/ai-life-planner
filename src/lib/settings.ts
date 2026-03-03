@@ -5,6 +5,7 @@ const DEFAULT_SETTINGS: Omit<Settings, 'id'> = {
   theme: 'light',
   soundEnabled: true,
   sortBy: 'priority',
+  viewMode: 'list',
   setupCompleted: false,
 };
 
