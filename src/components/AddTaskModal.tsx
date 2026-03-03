@@ -30,6 +30,23 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
   const [dueDate, setDueDate] = useState('');
   const [block, setBlock] = useState<TimeBlock | ''>('');
   const [subtasks, setSubtasks] = useState<{ id?: number; title: string; startDate: string; dueDate: string }[]>([]);
+  const [parentDateConstraints, setParentDateConstraints] = useState<{ min?: string; max?: string }>({});
+
+  useEffect(() => {
+    if (editingTask?.parentId) {
+      // サブタスク編集時: 親タスクの期間を取得して制約に使う
+      db.tasks.get(editingTask.parentId).then(parent => {
+        if (parent) {
+          setParentDateConstraints({ min: parent.startDate, max: parent.dueDate });
+        }
+      });
+    } else if (parentTask) {
+      // サブタスク追加時: 親タスクの期間で制約
+      setParentDateConstraints({ min: parentTask.startDate, max: parentTask.dueDate });
+    } else {
+      setParentDateConstraints({});
+    }
+  }, [editingTask, parentTask, isOpen]);
 
   useEffect(() => {
     if (editingTask) {
@@ -204,6 +221,8 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
                 placeholder="開始日"
+                min={parentDateConstraints.min || undefined}
+                max={parentDateConstraints.max || undefined}
                 className="flex-1 px-3 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
               />
               <span className="text-gray-400 dark:text-gray-500 text-sm flex-shrink-0">〜</span>
@@ -212,6 +231,8 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                 value={dueDate}
                 onChange={(e) => setDueDate(e.target.value)}
                 placeholder="期限"
+                min={parentDateConstraints.min || undefined}
+                max={parentDateConstraints.max || undefined}
                 className="flex-1 px-3 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
               />
             </div>
@@ -246,6 +267,8 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                             updated[i] = { ...updated[i], startDate: e.target.value };
                             setSubtasks(updated);
                           }}
+                          min={startDate || undefined}
+                          max={dueDate || undefined}
                           className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-xs bg-white dark:bg-gray-700 dark:text-gray-100 text-gray-400 dark:text-gray-500"
                         />
                         <span className="text-gray-400 dark:text-gray-500 text-xs flex-shrink-0">〜</span>
@@ -257,6 +280,8 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                             updated[i] = { ...updated[i], dueDate: e.target.value };
                             setSubtasks(updated);
                           }}
+                          min={startDate || undefined}
+                          max={dueDate || undefined}
                           className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-xs bg-white dark:bg-gray-700 dark:text-gray-100 text-gray-400 dark:text-gray-500"
                         />
                       </div>
