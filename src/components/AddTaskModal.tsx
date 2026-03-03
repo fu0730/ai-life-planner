@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/db';
+import DatePicker from '@/components/DatePicker';
 import type { Task, Category, TimeBlock } from '@/types';
 
 const BLOCK_OPTIONS: { value: TimeBlock | ''; label: string; emoji: string }[] = [
@@ -216,25 +217,25 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
           <div>
             <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">期間（任意）</label>
             <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                placeholder="開始日"
-                min={parentDateConstraints.min || undefined}
-                max={parentDateConstraints.max || undefined}
-                className="flex-1 px-3 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
-              />
+              <div className="flex-1">
+                <DatePicker
+                  value={startDate}
+                  onChange={setStartDate}
+                  placeholder="開始日"
+                  min={parentDateConstraints.min}
+                  max={parentDateConstraints.max}
+                />
+              </div>
               <span className="text-gray-400 dark:text-gray-500 text-sm flex-shrink-0">〜</span>
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                placeholder="期限"
-                min={parentDateConstraints.min || undefined}
-                max={parentDateConstraints.max || undefined}
-                className="flex-1 px-3 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
-              />
+              <div className="flex-1">
+                <DatePicker
+                  value={dueDate}
+                  onChange={setDueDate}
+                  placeholder="期限"
+                  min={parentDateConstraints.min}
+                  max={parentDateConstraints.max}
+                />
+              </div>
             </div>
           </div>
 
@@ -259,31 +260,35 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                         className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
                       />
                       <div className="flex items-center gap-1.5">
-                        <input
-                          type="date"
-                          value={st.startDate}
-                          onChange={(e) => {
-                            const updated = [...subtasks];
-                            updated[i] = { ...updated[i], startDate: e.target.value };
-                            setSubtasks(updated);
-                          }}
-                          min={startDate || undefined}
-                          max={dueDate || undefined}
-                          className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-xs bg-white dark:bg-gray-700 dark:text-gray-100 text-gray-400 dark:text-gray-500"
-                        />
+                        <div className="flex-1">
+                          <DatePicker
+                            value={st.startDate}
+                            onChange={(v) => {
+                              const updated = [...subtasks];
+                              updated[i] = { ...updated[i], startDate: v };
+                              setSubtasks(updated);
+                            }}
+                            placeholder="開始"
+                            min={startDate || undefined}
+                            max={dueDate || undefined}
+                            size="small"
+                          />
+                        </div>
                         <span className="text-gray-400 dark:text-gray-500 text-xs flex-shrink-0">〜</span>
-                        <input
-                          type="date"
-                          value={st.dueDate}
-                          onChange={(e) => {
-                            const updated = [...subtasks];
-                            updated[i] = { ...updated[i], dueDate: e.target.value };
-                            setSubtasks(updated);
-                          }}
-                          min={startDate || undefined}
-                          max={dueDate || undefined}
-                          className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-300 text-xs bg-white dark:bg-gray-700 dark:text-gray-100 text-gray-400 dark:text-gray-500"
-                        />
+                        <div className="flex-1">
+                          <DatePicker
+                            value={st.dueDate}
+                            onChange={(v) => {
+                              const updated = [...subtasks];
+                              updated[i] = { ...updated[i], dueDate: v };
+                              setSubtasks(updated);
+                            }}
+                            placeholder="期限"
+                            min={startDate || undefined}
+                            max={dueDate || undefined}
+                            size="small"
+                          />
+                        </div>
                       </div>
                     </div>
                     <button
