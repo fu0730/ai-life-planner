@@ -92,7 +92,7 @@ export default function TaskItem({ task, category, onToggle, onDelete, onEdit, o
           className="flex-1 min-w-0 cursor-pointer"
           onClick={() => setIsExpanded(!isExpanded)}
         >
-          <p className={`text-[15px] leading-snug transition-all duration-300 ${
+          <p className={`text-[15px] leading-snug transition-all duration-300 truncate ${
             task.completed
               ? 'line-through text-gray-400 dark:text-gray-500'
               : 'text-gray-800 dark:text-gray-100 font-medium'
