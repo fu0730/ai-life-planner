@@ -2,20 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import webpush from 'web-push';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
-webpush.setVapidDetails(
-  'mailto:life-planner@example.com',
-  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!,
-  process.env.VAPID_PRIVATE_KEY!
-);
+function initVapid() {
+  webpush.setVapidDetails(
+    'mailto:life-planner@example.com',
+    process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!.trim(),
+    process.env.VAPID_PRIVATE_KEY!.trim()
+  );
+}
 
-// 送信予定の通知を処理（Cronから呼び出し）
-export async function POST(req: NextRequest) {
+async function sendPendingNotifications(req: NextRequest) {
   try {
+    initVapid();
+    const supabase = getSupabase();
+
     // 簡易認証（Cronジョブ用）
     const authHeader = req.headers.get('authorization');
     if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
@@ -60,7 +66,6 @@ export async function POST(req: NextRequest) {
         sentCount++;
       } catch (err: unknown) {
         console.error('通知送信エラー:', err);
-        // 410 Gone = 購読が無効（ブラウザで解除された等）
         if (err && typeof err === 'object' && 'statusCode' in err && (err as { statusCode: number }).statusCode === 410) {
           failedIds.push(sub.id);
         }
@@ -83,4 +88,13 @@ export async function POST(req: NextRequest) {
   } catch {
     return NextResponse.json({ error: 'サーバーエラー' }, { status: 500 });
   }
+}
+
+// Vercel CronはGETリクエストを送る
+export async function GET(req: NextRequest) {
+  return sendPendingNotifications(req);
+}
+
+export async function POST(req: NextRequest) {
+  return sendPendingNotifications(req);
 }

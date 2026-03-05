@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 // 購読登録
 export async function POST(req: NextRequest) {
   try {
+    const supabase = getSupabase();
     const subscription = await req.json();
 
     const { error } = await supabase.from('push_subscriptions').upsert(
@@ -34,6 +37,7 @@ export async function POST(req: NextRequest) {
 // 購読解除
 export async function DELETE(req: NextRequest) {
   try {
+    const supabase = getSupabase();
     const { endpoint } = await req.json();
 
     // 関連する通知スケジュールも一緒に削除される（CASCADE）
