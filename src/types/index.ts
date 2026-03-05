@@ -9,6 +9,8 @@ export interface Category {
   parentId?: number;
 }
 
+export type ReminderType = 'morning' | 'day-before' | null;
+
 export interface Task {
   id?: number;
   title: string;
@@ -22,6 +24,7 @@ export interface Task {
   parentId?: number;
   isFolder?: boolean;
   calendarDisplay?: 'bar' | 'background';
+  reminder?: ReminderType;
   createdAt: string;
   completedAt?: string;
 }
@@ -30,6 +33,7 @@ export interface Routine {
   id?: number;
   title: string;
   block: TimeBlock;
+  startTime?: string;      // "07:00" 形式（任意）
   estimatedMinutes?: number;
   days: number[];          // [0=日, 1=月, ... 6=土]
   order: number;

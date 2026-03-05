@@ -24,6 +24,12 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
   const [menuTask, setMenuTask] = useState<Task | null>(null);
   const [inlineEditId, setInlineEditId] = useState<number | null>(null);
   const [inlineEditValue, setInlineEditValue] = useState('');
+  const [inlineAddCategoryId, setInlineAddCategoryId] = useState<number | null>(null);
+  const [inlineAddValue, setInlineAddValue] = useState('');
+  const inlineAddRef = useRef<HTMLInputElement>(null);
+  const [inlineSubAddParentId, setInlineSubAddParentId] = useState<number | null>(null);
+  const [inlineSubAddValue, setInlineSubAddValue] = useState('');
+  const inlineSubAddRef = useRef<HTMLInputElement>(null);
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
@@ -75,6 +81,52 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
     onMouseUp: handlePressEnd,
     onMouseLeave: handlePressEnd,
   });
+
+  const startInlineAdd = useCallback((categoryId: number) => {
+    setInlineAddCategoryId(categoryId);
+    setInlineAddValue('');
+    setTimeout(() => inlineAddRef.current?.focus(), 0);
+  }, []);
+
+  const saveInlineAdd = useCallback(async () => {
+    const trimmed = inlineAddValue.trim();
+    if (trimmed && inlineAddCategoryId !== null) {
+      await db.tasks.add({
+        title: trimmed,
+        categoryId: inlineAddCategoryId,
+        priority: 'medium',
+        completed: false,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    setInlineAddCategoryId(null);
+    setInlineAddValue('');
+  }, [inlineAddValue, inlineAddCategoryId]);
+
+  const startInlineSubAdd = useCallback((parentId: number) => {
+    setInlineSubAddParentId(parentId);
+    setInlineSubAddValue('');
+    setTimeout(() => inlineSubAddRef.current?.focus(), 0);
+  }, []);
+
+  const saveInlineSubAdd = useCallback(async () => {
+    const trimmed = inlineSubAddValue.trim();
+    if (trimmed && inlineSubAddParentId !== null) {
+      const parent = await db.tasks.get(inlineSubAddParentId);
+      if (parent) {
+        await db.tasks.add({
+          title: trimmed,
+          categoryId: parent.categoryId,
+          priority: parent.priority,
+          parentId: inlineSubAddParentId,
+          completed: false,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    }
+    setInlineSubAddParentId(null);
+    setInlineSubAddValue('');
+  }, [inlineSubAddValue, inlineSubAddParentId]);
 
   const viewMode = settings?.viewMode || 'list';
   const setViewMode = async (mode: 'list' | 'grid') => {
@@ -248,6 +300,49 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
     );
   };
 
+  const renderInlineAdd = (categoryId: number) => {
+    if (inlineAddCategoryId === categoryId) {
+      return (
+        <div className="flex items-center gap-2 px-2 py-1.5">
+          <svg className="w-3.5 h-3.5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+          <input
+            ref={inlineAddRef}
+            type="text"
+            value={inlineAddValue}
+            onChange={(e) => setInlineAddValue(e.target.value)}
+            onBlur={saveInlineAdd}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                saveInlineAdd();
+              }
+              if (e.key === 'Escape') {
+                setInlineAddCategoryId(null);
+                setInlineAddValue('');
+              }
+            }}
+            placeholder="タスク名を入力"
+            className="flex-1 text-xs bg-transparent border-b-2 border-blue-400 focus:outline-none text-gray-700 dark:text-gray-200 py-0.5"
+            autoFocus
+          />
+        </div>
+      );
+    }
+    return (
+      <button
+        onClick={() => startInlineAdd(categoryId)}
+        className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-gray-400 dark:text-gray-500 hover:text-[var(--accent)] dark:hover:text-[var(--accent)] transition-colors w-full"
+      >
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+        </svg>
+        タスクを追加
+      </button>
+    );
+  };
+
   return (
     <div className="space-y-3">
       {/* ヘッダー */}
@@ -321,8 +416,6 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
             const completed = allTasks.filter(t => t.completed);
             const sorted = sortTasks(active);
             const displayTasks = [...sorted, ...(showCompleted ? completed : [])];
-
-            if (allTasks.length === 0) return null;
 
             return (
               <div
@@ -501,8 +594,52 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                                     {child.title}
                                   </p>
                                 )}
+                                {(child.startDate || child.dueDate) && (
+                                  <span className="text-[9px] text-gray-400 dark:text-gray-500 flex-shrink-0 whitespace-nowrap">
+                                    {child.startDate && child.dueDate
+                                      ? `${new Date(child.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜${new Date(child.dueDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+                                      : child.startDate
+                                      ? `${new Date(child.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜`
+                                      : `〜${new Date(child.dueDate!).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+                                    }
+                                  </span>
+                                )}
                               </div>
                             ))}
+                            {/* サブタスク追加 */}
+                            {!task.completed && (
+                              inlineSubAddParentId === task.id ? (
+                                <div className="flex items-center gap-2 px-2 py-1">
+                                  <svg className="w-3 h-3 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                                  </svg>
+                                  <input
+                                    ref={inlineSubAddRef}
+                                    type="text"
+                                    value={inlineSubAddValue}
+                                    onChange={(e) => setInlineSubAddValue(e.target.value)}
+                                    onBlur={saveInlineSubAdd}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') { e.preventDefault(); saveInlineSubAdd(); }
+                                      if (e.key === 'Escape') { setInlineSubAddParentId(null); setInlineSubAddValue(''); }
+                                    }}
+                                    placeholder="サブタスク名"
+                                    className="flex-1 text-[11px] bg-transparent border-b-2 border-blue-400 focus:outline-none text-gray-600 dark:text-gray-300 py-0.5"
+                                    autoFocus
+                                  />
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => startInlineSubAdd(task.id!)}
+                                  className="flex items-center gap-1 px-2 py-1 text-[11px] text-gray-400 dark:text-gray-500 hover:text-[var(--accent)] dark:hover:text-[var(--accent)] transition-colors w-full"
+                                >
+                                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                                  </svg>
+                                  追加
+                                </button>
+                              )
+                            )}
                           </div>}
                         </div>
                       );
@@ -558,21 +695,25 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                               {task.title}
                             </p>
                           )}
-                          {(task.startDate || task.dueDate) && (
-                            <p className="text-[10px] text-gray-400 dark:text-gray-500">
-                              {task.dueDate
-                                ? `〜${new Date(task.dueDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
-                                : `${new Date(task.startDate!).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜`
-                              }
-                            </p>
-                          )}
                         </div>
+                        {(task.startDate || task.dueDate) && (
+                          <span className="text-[10px] text-gray-400 dark:text-gray-500 flex-shrink-0 whitespace-nowrap">
+                            {task.startDate && task.dueDate
+                              ? `${new Date(task.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜${new Date(task.dueDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+                              : task.startDate
+                              ? `${new Date(task.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜`
+                              : `〜${new Date(task.dueDate!).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+                            }
+                          </span>
+                        )}
+                        <div className="w-[14px] h-[14px] flex-shrink-0" />
                         {task.priority === 'high' && !task.completed && (
                           <span className="w-1.5 h-1.5 rounded-full bg-red-400 flex-shrink-0" />
                         )}
                       </div>
                     );
                   })}
+                  {renderInlineAdd(parent.id!)}
                 </div>}
               </div>
             );
@@ -586,8 +727,6 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
             const allTasks = getAllTasksForParent(parent.id!);
             const activeCount = allTasks.filter(t => !t.completed).length;
             const isCollapsed = collapsedCategories.has(parent.id!);
-
-            if (allTasks.length === 0) return null;
 
             const directTasks = getTasksForCategory(parent.id!);
 
@@ -655,6 +794,10 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                         {renderTaskList(directTasks, parent)}
                       </div>
                     )}
+                    {/* カテゴリ内タスク追加 */}
+                    <div className="px-3 pb-1">
+                      {renderInlineAdd(parent.id!)}
+                    </div>
                   </div>
                 )}
               </div>

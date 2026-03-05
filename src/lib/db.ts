@@ -115,4 +115,26 @@ db.version(10).stores({
   chatMessages: '++id, createdAt',
 });
 
+db.version(11).stores({
+  tasks: '++id, categoryId, completed, dueDate, createdAt, completedAt, block, parentId, startDate, calendarDisplay, isFolder',
+  categories: '++id, name, order, type, parentId',
+  reflections: '++id, date',
+  settings: '++id',
+  routines: '++id, block, order, startTime',
+  routineCompletions: '++id, routineId, date, [routineId+date]',
+  userProfile: '++id',
+  chatMessages: '++id, createdAt',
+});
+
+db.version(12).stores({
+  tasks: '++id, categoryId, completed, dueDate, createdAt, completedAt, block, parentId, startDate, calendarDisplay, isFolder, reminder',
+  categories: '++id, name, order, type, parentId',
+  reflections: '++id, date',
+  settings: '++id',
+  routines: '++id, block, order, startTime',
+  routineCompletions: '++id, routineId, date, [routineId+date]',
+  userProfile: '++id',
+  chatMessages: '++id, createdAt',
+});
+
 export { db };

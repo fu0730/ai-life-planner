@@ -376,6 +376,22 @@ export default function TaskItem({ task, category, onToggle, onDelete, onEdit, o
             style={{ backgroundColor: category?.color || '#d1d5db' }}
           />
 
+          {/* サブタスク展開矢印 */}
+          {totalSubtasks > 0 ? (
+            <button
+              onClick={() => setIsExpanded(!isExpanded)}
+              className="flex-shrink-0 -mr-1.5"
+              aria-label={isExpanded ? 'サブタスクを閉じる' : 'サブタスクを開く'}
+            >
+              <svg
+                className={`w-4 h-4 text-gray-400 dark:text-gray-500 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          ) : null}
+
           {/* チェックボタン */}
           <button
             onClick={handleToggle}
@@ -418,22 +434,26 @@ export default function TaskItem({ task, category, onToggle, onDelete, onEdit, o
                 {task.title}
               </p>
             )}
-            {(task.startDate || task.dueDate) && (
-              <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-                {task.startDate && task.dueDate
-                  ? `${new Date(task.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })} 〜 ${new Date(task.dueDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
-                  : task.startDate
-                  ? `${new Date(task.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜`
-                  : `〜${new Date(task.dueDate!).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
-                }
-              </p>
-            )}
           </div>
 
-          {/* サブタスク進捗 */}
-          {totalSubtasks > 0 && (
-            <MiniDonut completed={completedSubtasks} total={totalSubtasks} size={18} onClick={undoLastSubtask} />
+          {/* 期間・期限 */}
+          {(task.startDate || task.dueDate) && (
+            <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0 whitespace-nowrap">
+              {task.startDate && task.dueDate
+                ? `${new Date(task.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })} 〜 ${new Date(task.dueDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+                : task.startDate
+                ? `${new Date(task.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜`
+                : `〜${new Date(task.dueDate!).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+              }
+            </span>
           )}
+
+          {/* サブタスク進捗（スペース固定） */}
+          <div className="w-[18px] h-[18px] flex-shrink-0">
+            {totalSubtasks > 0 && (
+              <MiniDonut completed={completedSubtasks} total={totalSubtasks} size={18} onClick={undoLastSubtask} />
+            )}
+          </div>
 
           {/* 優先度ドット */}
           {task.priority === 'high' && !task.completed && (
@@ -468,25 +488,23 @@ export default function TaskItem({ task, category, onToggle, onDelete, onEdit, o
                         </svg>
                       )}
                     </button>
-                    <div className="flex-1 min-w-0">
-                      <span className={`text-sm truncate block ${
-                        sub.completed
-                          ? 'line-through text-gray-400 dark:text-gray-500'
-                          : 'text-gray-700 dark:text-gray-300'
-                      }`}>
-                        {sub.title}
+                    <span className={`text-sm truncate flex-1 min-w-0 ${
+                      sub.completed
+                        ? 'line-through text-gray-400 dark:text-gray-500'
+                        : 'text-gray-700 dark:text-gray-300'
+                    }`}>
+                      {sub.title}
+                    </span>
+                    {(sub.startDate || sub.dueDate) && (
+                      <span className="text-[11px] text-gray-400 dark:text-gray-500 flex-shrink-0 whitespace-nowrap">
+                        {sub.startDate && sub.dueDate
+                          ? `${new Date(sub.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜${new Date(sub.dueDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+                          : sub.startDate
+                          ? `${new Date(sub.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜`
+                          : `〜${new Date(sub.dueDate!).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
+                        }
                       </span>
-                      {(sub.startDate || sub.dueDate) && (
-                        <span className="text-[11px] text-gray-400 dark:text-gray-500">
-                          {sub.startDate && sub.dueDate
-                            ? `${new Date(sub.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })} 〜 ${new Date(sub.dueDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
-                            : sub.startDate
-                            ? `${new Date(sub.startDate).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}〜`
-                            : `〜${new Date(sub.dueDate!).toLocaleDateString('ja-JP', { month: 'numeric', day: 'numeric' })}`
-                          }
-                        </span>
-                      )}
-                    </div>
+                    )}
                     <button
                       onClick={() => sub.id !== undefined && deleteSubtask(sub.id)}
                       className="text-gray-300 dark:text-gray-600 hover:text-red-400 dark:hover:text-red-400 flex-shrink-0 transition-colors p-0.5"

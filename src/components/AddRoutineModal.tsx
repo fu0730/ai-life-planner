@@ -22,6 +22,7 @@ const DAY_LABELS = ['日', '月', '火', '水', '木', '金', '土'];
 export default function AddRoutineModal({ isOpen, onClose, onSave, editingRoutine }: AddRoutineModalProps) {
   const [title, setTitle] = useState('');
   const [block, setBlock] = useState<TimeBlock>('morning');
+  const [startTime, setStartTime] = useState('');
   const [estimatedMinutes, setEstimatedMinutes] = useState('');
   const [days, setDays] = useState<number[]>([0, 1, 2, 3, 4, 5, 6]);
 
@@ -29,11 +30,13 @@ export default function AddRoutineModal({ isOpen, onClose, onSave, editingRoutin
     if (editingRoutine) {
       setTitle(editingRoutine.title);
       setBlock(editingRoutine.block);
+      setStartTime(editingRoutine.startTime || '');
       setEstimatedMinutes(editingRoutine.estimatedMinutes?.toString() || '');
       setDays(editingRoutine.days);
     } else {
       setTitle('');
       setBlock('morning');
+      setStartTime('');
       setEstimatedMinutes('');
       setDays([0, 1, 2, 3, 4, 5, 6]);
     }
@@ -64,6 +67,7 @@ export default function AddRoutineModal({ isOpen, onClose, onSave, editingRoutin
     onSave({
       title: title.trim(),
       block,
+      startTime: startTime || undefined,
       estimatedMinutes: estimatedMinutes ? parseInt(estimatedMinutes) : undefined,
       days,
       order: 0,
@@ -111,6 +115,16 @@ export default function AddRoutineModal({ isOpen, onClose, onSave, editingRoutin
                 </button>
               ))}
             </div>
+          </div>
+
+          <div>
+            <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">開始時間（任意）</label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-300 text-sm bg-white dark:bg-gray-700 dark:text-gray-100"
+            />
           </div>
 
           <div>

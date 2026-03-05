@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { db } from '@/lib/db';
 import DatePicker from '@/components/DatePicker';
-import type { Task, Category } from '@/types';
+import type { Task, Category, ReminderType } from '@/types';
 
 interface AddTaskModalProps {
   isOpen: boolean;
@@ -25,6 +25,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
   const [calendarDisplay, setCalendarDisplay] = useState<'bar' | 'background'>('bar');
   const [subtasks, setSubtasks] = useState<{ id?: number; title: string; startDate: string; dueDate: string }[]>([]);
   const [isFolder, setIsFolder] = useState(false);
+  const [reminder, setReminder] = useState<ReminderType>(null);
   const [parentDateConstraints, setParentDateConstraints] = useState<{ min?: string; max?: string }>({});
 
   // 折りたたみ状態
@@ -32,6 +33,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
   const [showMemo, setShowMemo] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showSubtasks, setShowSubtasks] = useState(false);
+  const [showReminder, setShowReminder] = useState(false);
 
   useEffect(() => {
     if (editingTask?.parentId) {
@@ -58,9 +60,11 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
       setBlock(editingTask.block || '');
       setCalendarDisplay(editingTask.calendarDisplay || 'bar');
       setIsFolder(editingTask.isFolder || false);
+      setReminder(editingTask.reminder || null);
       setShowMemo(!!editingTask.memo);
       setShowDatePicker(false);
       setShowCategoryPicker(false);
+      setShowReminder(false);
       // 親タスク編集時は既存サブタスクを読み込む
       if (editingTask.id !== undefined && !editingTask.parentId) {
         db.tasks.where('parentId').equals(editingTask.id).toArray().then(existing => {
@@ -81,11 +85,13 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
       setBlock(parentTask.block || '');
       setCalendarDisplay('bar');
       setIsFolder(false);
+      setReminder(null);
       setSubtasks([]);
       setShowMemo(false);
       setShowDatePicker(false);
       setShowCategoryPicker(false);
       setShowSubtasks(false);
+      setShowReminder(false);
     } else {
       setTitle('');
       setMemo('');
@@ -96,11 +102,13 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
       setBlock('');
       setCalendarDisplay('bar');
       setIsFolder(false);
+      setReminder(null);
       setSubtasks([]);
       setShowMemo(false);
       setShowDatePicker(false);
       setShowCategoryPicker(false);
       setShowSubtasks(false);
+      setShowReminder(false);
     }
   }, [editingTask, parentTask, isOpen, categories]);
 
@@ -126,7 +134,7 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
       .filter(s => s.title.trim())
       .map(s => ({ id: s.id, title: s.title.trim(), startDate: s.startDate || undefined, dueDate: s.dueDate || undefined }));
     onSave(
-      { title: title.trim(), memo: memo.trim() || undefined, categoryId, priority, startDate: startDate || undefined, dueDate: dueDate || undefined, block: (block || undefined) as Task['block'], parentId: parentTask?.id, isFolder: isFolder || undefined, calendarDisplay: calendarDisplay !== 'bar' ? calendarDisplay : undefined },
+      { title: title.trim(), memo: memo.trim() || undefined, categoryId, priority, startDate: startDate || undefined, dueDate: dueDate || undefined, block: (block || undefined) as Task['block'], parentId: parentTask?.id, isFolder: isFolder || undefined, calendarDisplay: calendarDisplay !== 'bar' ? calendarDisplay : undefined, reminder: reminder || undefined },
       !parentTask && !(editingTask?.parentId) ? validSubtasks : undefined
     );
     onClose();
@@ -249,6 +257,21 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
                   </svg>
                   {memo ? 'メモあり' : 'メモ'}
+                </button>
+                {/* リマインドボタン */}
+                <button
+                  type="button"
+                  onClick={() => { setShowReminder(!showReminder); setShowCategoryPicker(false); setShowDatePicker(false); setShowMemo(false); }}
+                  className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                    reminder
+                      ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 border border-purple-200 dark:border-purple-800'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
+                  }`}
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.857 17.082a23.848 23.848 0 005.454-1.31A8.967 8.967 0 0118 9.75v-.7V9A6 6 0 006 9v.75a8.967 8.967 0 01-2.312 6.022c1.733.64 3.56 1.085 5.455 1.31m5.714 0a24.255 24.255 0 01-5.714 0m5.714 0a3 3 0 11-5.714 0" />
+                  </svg>
+                  {reminder === 'morning' ? '当日朝' : reminder === 'day-before' ? '前日' : '通知'}
                 </button>
                 {/* フォルダボタン */}
                 {!parentTask && !editingTask?.parentId && (
@@ -404,6 +427,36 @@ export default function AddTaskModal({ isOpen, onClose, onSave, categories, edit
                   rows={2}
                   autoFocus
                 />
+              )}
+
+              {/* リマインド展開 */}
+              {showReminder && (
+                <div>
+                  <label className="text-xs text-gray-500 dark:text-gray-400 mb-1.5 block">リマインド通知（期限が必要）</label>
+                  <div className="flex gap-2">
+                    {([
+                      { value: null, label: 'なし' },
+                      { value: 'morning', label: '当日朝' },
+                      { value: 'day-before', label: '前日' },
+                    ] as const).map((r) => (
+                      <button
+                        key={r.label}
+                        type="button"
+                        onClick={() => setReminder(r.value)}
+                        className={`flex-1 px-3 py-1.5 rounded-xl text-xs font-medium transition-all border ${
+                          reminder === r.value
+                            ? 'border-purple-400 bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                            : 'border-gray-200 dark:border-gray-600 text-gray-500 dark:text-gray-400'
+                        }`}
+                      >
+                        {r.label}
+                      </button>
+                    ))}
+                  </div>
+                  {reminder && !dueDate && (
+                    <p className="text-xs text-red-400 mt-1.5">期限を設定してください</p>
+                  )}
+                </div>
               )}
             </div>
           )}

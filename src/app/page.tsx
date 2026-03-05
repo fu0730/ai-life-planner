@@ -11,10 +11,9 @@ import AddRoutineModal from '@/components/AddRoutineModal';
 import QuickAddPanel from '@/components/QuickAddPanel';
 import SettingsView from '@/components/SettingsView';
 import ProfileView from '@/components/ProfileView';
-import ReflectionModal from '@/components/ReflectionModal';
-import WeeklyReview from '@/components/WeeklyReview';
 import ChatView from '@/components/ChatView';
 import SetupFlow from '@/components/SetupFlow';
+import { scheduleReminder, cancelReminder } from '@/lib/push';
 import { db } from '@/lib/db';
 import { seedDefaultCategories } from '@/lib/seed';
 import { getSettings } from '@/lib/settings';
@@ -35,8 +34,6 @@ export default function Home() {
   const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isReflectionOpen, setIsReflectionOpen] = useState(false);
-  const [isReviewOpen, setIsReviewOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatInitialMessage, setChatInitialMessage] = useState<string | undefined>(undefined);
   const [isCalendarOpen, setIsCalendarOpen] = useState(false);
@@ -90,6 +87,13 @@ export default function Home() {
     if (editingTask?.id) {
       await db.tasks.update(editingTask.id, taskData);
 
+      // リマインド通知のスケジュール更新
+      if (taskData.reminder && taskData.dueDate) {
+        scheduleReminder(editingTask.id, taskData.title, taskData.dueDate, taskData.reminder);
+      } else {
+        cancelReminder(editingTask.id);
+      }
+
       // サブタスクの更新処理
       if (subtasks !== undefined) {
         const existing = await db.tasks.where('parentId').equals(editingTask.id).toArray();
@@ -127,6 +131,12 @@ export default function Home() {
         completed: false,
         createdAt: new Date().toISOString(),
       });
+
+      // リマインド通知のスケジュール登録
+      if (taskData.reminder && taskData.dueDate) {
+        scheduleReminder(parentId as number, taskData.title, taskData.dueDate, taskData.reminder);
+      }
+
       // サブタスクも一緒に作成
       if (subtasks && subtasks.length > 0) {
         const now = new Date().toISOString();
@@ -205,22 +215,22 @@ export default function Home() {
         title={tabTitles[activeTab]}
         onSettingsClick={() => setIsSettingsOpen(true)}
         onProfileClick={() => setIsProfileOpen(true)}
-        onReflectionClick={() => setIsReflectionOpen(true)}
-        onReviewClick={() => setIsReviewOpen(true)}
         onCalendarClick={() => setIsCalendarOpen(true)}
       />
 
       <main className="pt-14 pb-20 px-4 max-w-lg mx-auto">
         <div className="py-4">
-          {activeTab === 'today' && (
+          <div className={activeTab === 'today' ? '' : 'hidden'}>
             <TodayView
               onEditTask={handleEditTask}
               onEditRoutine={handleEditRoutine}
               onAddSubtask={handleAddSubtask}
               settings={settings}
             />
-          )}
-          {activeTab === 'tasks' && <TasksView onEditTask={handleEditTask} onAddSubtask={handleAddSubtask} settings={settings} />}
+          </div>
+          <div className={activeTab === 'tasks' ? '' : 'hidden'}>
+            <TasksView onEditTask={handleEditTask} onAddSubtask={handleAddSubtask} settings={settings} />
+          </div>
         </div>
       </main>
 
@@ -292,15 +302,6 @@ export default function Home() {
         }}
       />
 
-      <ReflectionModal
-        isOpen={isReflectionOpen}
-        onClose={() => setIsReflectionOpen(false)}
-      />
-
-      <WeeklyReview
-        isOpen={isReviewOpen}
-        onClose={() => setIsReviewOpen(false)}
-      />
 
       <ChatView
         isOpen={isChatOpen}

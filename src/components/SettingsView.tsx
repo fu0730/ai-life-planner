@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
 import { updateSettings } from '@/lib/settings';
+import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, getNotificationPermission } from '@/lib/push';
 import type { Settings, Category } from '@/types';
 
 interface SettingsViewProps {
@@ -25,6 +26,8 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [addingSubTo, setAddingSubTo] = useState<number | null>(null);
   const [newSubName, setNewSubName] = useState('');
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushLoading, setPushLoading] = useState(false);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
 
@@ -35,9 +38,34 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
   useEffect(() => {
     if (isOpen) {
       document.addEventListener('keydown', handleKeyDown);
+      isPushSubscribed().then(setPushEnabled);
       return () => document.removeEventListener('keydown', handleKeyDown);
     }
   }, [isOpen, handleKeyDown]);
+
+  const handlePushToggle = async () => {
+    setPushLoading(true);
+    try {
+      if (pushEnabled) {
+        const ok = await unsubscribeFromPush();
+        if (ok) setPushEnabled(false);
+      } else {
+        const permission = getNotificationPermission();
+        if (permission === 'unsupported') {
+          alert('このブラウザは通知に対応していません');
+          return;
+        }
+        if (permission === 'denied') {
+          alert('通知がブロックされています。ブラウザの設定から許可してください');
+          return;
+        }
+        const ok = await subscribeToPush();
+        if (ok) setPushEnabled(true);
+      }
+    } finally {
+      setPushLoading(false);
+    }
+  };
 
   if (!isOpen || !settings) return null;
 
@@ -174,6 +202,27 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
             >
               {settings.soundEnabled ? '🔊 ON' : '🔇 OFF'}
             </button>
+          </section>
+
+          {/* プッシュ通知 */}
+          <section className="mb-8">
+            <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">プッシュ通知</h3>
+            <button
+              onClick={handlePushToggle}
+              disabled={pushLoading}
+              className={`w-full py-3 rounded-xl text-sm font-medium transition-all ${
+                pushEnabled
+                  ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+              } ${pushLoading ? 'opacity-50' : ''}`}
+            >
+              {pushLoading ? '処理中...' : pushEnabled ? '🔔 ON' : '🔕 OFF'}
+            </button>
+            {pushEnabled && (
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2 text-center">
+                タスクの期限前にリマインド通知が届きます
+              </p>
+            )}
           </section>
 
           {/* カテゴリ管理 */}

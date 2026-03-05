@@ -161,6 +161,13 @@ function RoutineItem({ routine, completed, onToggle, onEdit, onDelete, soundEnab
           )}
         </button>
 
+        {/* 開始時間 */}
+        {routine.startTime && (
+          <span className="text-xs text-gray-400 dark:text-gray-500 font-mono flex-shrink-0">
+            {routine.startTime}
+          </span>
+        )}
+
         {/* タイトル */}
         <div
           className="flex-1 min-w-0 cursor-pointer"
@@ -406,7 +413,15 @@ export default function TodayView({ onEditTask, onEditRoutine, onAddSubtask, set
 
   // ブロックごとにアイテムを分類
   const getBlockRoutines = (block: TimeBlock) =>
-    todayRoutines.filter((r) => r.block === block);
+    todayRoutines
+      .filter((r) => r.block === block)
+      .sort((a, b) => {
+        // startTimeありを先に、時間順にソート
+        if (a.startTime && b.startTime) return a.startTime.localeCompare(b.startTime);
+        if (a.startTime) return -1;
+        if (b.startTime) return 1;
+        return a.order - b.order;
+      });
 
   const getBlockTasks = (block: TimeBlock) =>
     sortTasks(tasks.filter((t) => t.block === block));
