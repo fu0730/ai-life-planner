@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { db } from '@/lib/db';
 import { updateSettings } from '@/lib/settings';
+import { subscribeToPush, getNotificationPermission } from '@/lib/push';
 import { useLiveQuery } from 'dexie-react-hooks';
 import type { Category } from '@/types';
 
@@ -10,7 +11,7 @@ interface SetupFlowProps {
   onComplete: () => void;
 }
 
-type Step = 0 | 1 | 2 | 3 | 4;
+type Step = 0 | 1 | 2 | 3 | 4 | 5;
 
 export default function SetupFlow({ onComplete }: SetupFlowProps) {
   const [step, setStep] = useState<Step>(0);
@@ -18,6 +19,7 @@ export default function SetupFlow({ onComplete }: SetupFlowProps) {
   const [bedTime, setBedTime] = useState('23:00');
   const [dreams, setDreams] = useState('');
   const [idealSelf, setIdealSelf] = useState('');
+  const [notificationStatus, setNotificationStatus] = useState<'idle' | 'loading' | 'done' | 'skipped'>('idle');
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
 
@@ -68,15 +70,26 @@ export default function SetupFlow({ onComplete }: SetupFlowProps) {
     onComplete();
   };
 
-  const next = () => setStep(s => Math.min(s + 1, 4) as Step);
+  const next = () => setStep(s => Math.min(s + 1, 5) as Step);
   const prev = () => setStep(s => Math.max(s - 1, 0) as Step);
+
+  const handleEnableNotification = async () => {
+    setNotificationStatus('loading');
+    const permission = getNotificationPermission();
+    if (permission === 'unsupported') {
+      setNotificationStatus('skipped');
+      return;
+    }
+    const ok = await subscribeToPush();
+    setNotificationStatus(ok ? 'done' : 'skipped');
+  };
 
   return (
     <div className="min-h-screen bg-[var(--background)] flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         {/* プログレスドット */}
         <div className="flex justify-center gap-2 mb-8">
-          {[0, 1, 2, 3, 4].map(i => (
+          {[0, 1, 2, 3, 4, 5].map(i => (
             <div
               key={i}
               className={`w-2 h-2 rounded-full transition-all ${
@@ -292,8 +305,78 @@ export default function SetupFlow({ onComplete }: SetupFlowProps) {
           </div>
         )}
 
-        {/* Step 4: 完了 */}
+        {/* Step 4: プッシュ通知 */}
         {step === 4 && (
+          <div className="animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="text-4xl mb-4">🔔</div>
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                通知をオンにする？
+              </h2>
+              <p className="text-gray-500 dark:text-gray-400 text-sm">
+                タスクの期限前にリマインドが届くよ
+                <br />
+                あとから設定で変更もOK
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {notificationStatus === 'idle' && (
+                <>
+                  <button
+                    onClick={handleEnableNotification}
+                    className="w-full py-3 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 active:scale-[0.98] transition-all"
+                  >
+                    通知をオンにする
+                  </button>
+                  <button
+                    onClick={() => { setNotificationStatus('skipped'); next(); }}
+                    className="w-full py-3 text-gray-500 dark:text-gray-400 text-sm"
+                  >
+                    あとで設定する
+                  </button>
+                </>
+              )}
+              {notificationStatus === 'loading' && (
+                <div className="text-center py-4">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">設定中...</p>
+                </div>
+              )}
+              {notificationStatus === 'done' && (
+                <div className="text-center py-4">
+                  <div className="text-3xl mb-3">✅</div>
+                  <p className="text-gray-700 dark:text-gray-200 font-medium mb-1">通知をオンにしたよ！</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">タスクにリマインドを設定すると届くよ</p>
+                </div>
+              )}
+              {notificationStatus === 'skipped' && (
+                <div className="text-center py-4">
+                  <p className="text-gray-500 dark:text-gray-400 text-sm">設定画面からいつでもオンにできるよ</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-10">
+              <button
+                onClick={prev}
+                className="flex-1 py-3 border border-gray-200 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-xl font-medium hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              >
+                もどる
+              </button>
+              {(notificationStatus === 'done' || notificationStatus === 'skipped') && (
+                <button
+                  onClick={next}
+                  className="flex-1 py-3 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 active:scale-[0.98] transition-all"
+                >
+                  つぎへ
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Step 5: 完了 */}
+        {step === 5 && (
           <div className="animate-fade-in text-center">
             <div className="text-5xl mb-6">🎉</div>
             <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">

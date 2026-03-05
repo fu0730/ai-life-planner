@@ -9,7 +9,7 @@ export async function seedDefaultCategories() {
     { name: '仕事', color: '#8B5CF6', order: 1, type: 'task' },
     { name: '買い物', color: '#10B981', order: 2, type: 'task' },
     { name: '日常', color: '#F59E0B', order: 3, type: 'task' },
-    { name: '持ち物チェック', color: '#EC4899', order: 4, type: 'checklist' },
+    { name: '買い物リスト', color: '#22C55E', order: 4, type: 'checklist' },
     { name: 'やりたいこと', color: '#06B6D4', order: 5, type: 'task' },
   ]);
 }

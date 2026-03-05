@@ -76,9 +76,9 @@ export default function AddRoutineModal({ isOpen, onClose, onSave, editingRoutin
   };
 
   return (
-    <div className="fixed inset-0 bg-black/30 z-50 flex items-end sm:items-center justify-center animate-overlay" role="dialog" aria-modal="true" aria-labelledby="routine-modal-title" onClick={onClose}>
+    <div className="fixed inset-0 bg-black/30 z-50 flex items-center justify-center animate-overlay" role="dialog" aria-modal="true" aria-labelledby="routine-modal-title" onClick={onClose}>
       <div
-        className="bg-white dark:bg-gray-800 w-full max-w-lg rounded-t-2xl sm:rounded-2xl p-6 max-h-[85vh] overflow-y-auto animate-slide-up"
+        className="bg-white dark:bg-gray-800 w-full max-w-lg mx-4 rounded-2xl p-6 max-h-[85vh] overflow-y-auto animate-slide-up"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 id="routine-modal-title" className="text-lg font-bold text-gray-800 dark:text-gray-100 mb-4">

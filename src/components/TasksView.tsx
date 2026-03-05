@@ -17,6 +17,7 @@ interface TasksViewProps {
 
 export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksViewProps) {
   const [collapsedCategories, setCollapsedCategories] = useState<Set<number>>(new Set());
+  const [userToggledCategories, setUserToggledCategories] = useState<Set<number>>(new Set());
   const [collapsedSubs, setCollapsedSubs] = useState<Set<number>>(new Set());
   const [expandedGridCategories, setExpandedGridCategories] = useState<Set<number>>(new Set());
   const [expandedGridTasks, setExpandedGridTasks] = useState<Set<number>>(new Set());
@@ -160,6 +161,11 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
   };
 
   const toggleCategory = (id: number) => {
+    setUserToggledCategories(prev => {
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
     setCollapsedCategories(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -400,7 +406,7 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
         )}
       </div>
 
-      {totalTasks === 0 ? (
+      {parentCategories.length === 0 && totalTasks === 0 ? (
         <div className="text-center py-16">
           <p className="text-4xl mb-3">📋</p>
           <p className="text-gray-500 dark:text-gray-400 text-sm">タスクはまだないよ</p>
@@ -726,7 +732,9 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
             const subs = getSubCategories(parent.id!);
             const allTasks = getAllTasksForParent(parent.id!);
             const activeCount = allTasks.filter(t => !t.completed).length;
-            const isCollapsed = collapsedCategories.has(parent.id!);
+            const isCollapsed = userToggledCategories.has(parent.id!)
+              ? collapsedCategories.has(parent.id!)
+              : allTasks.length === 0;
 
             const directTasks = getTasksForCategory(parent.id!);
 
@@ -757,8 +765,6 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                       const subTasks = getTasksForCategory(sub.id!);
                       const subActiveCount = subTasks.filter(t => !t.completed).length;
                       const isSubCollapsed = collapsedSubs.has(sub.id!);
-
-                      if (subTasks.length === 0) return null;
 
                       return (
                         <div key={sub.id}>

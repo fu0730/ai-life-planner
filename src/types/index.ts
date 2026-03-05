@@ -90,3 +90,33 @@ export interface ChatMessage {
   actions?: string; // AIAction[]のJSON文字列
   createdAt: string;
 }
+
+export type ListType = 'packing' | 'shopping';
+
+export interface CheckList {
+  id?: number;
+  name: string;
+  type: ListType;
+  color: string;
+  categoryId: number;
+  order: number;
+  createdAt: string;
+}
+
+export interface CheckListItem {
+  id?: number;
+  listId: number;
+  title: string;
+  checked: boolean;
+  tags?: string[];
+  order: number;
+  createdAt: string;
+  checkedAt?: string;
+}
+
+export interface PurchaseHistory {
+  id?: number;
+  listId: number;
+  title: string;
+  purchasedAt: string;
+}

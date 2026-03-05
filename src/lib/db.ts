@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Task, Category, DailyReflection, Settings, Routine, RoutineCompletion, UserProfile, ChatMessage } from '@/types';
+import type { Task, Category, DailyReflection, Settings, Routine, RoutineCompletion, UserProfile, ChatMessage, CheckList, CheckListItem, PurchaseHistory } from '@/types';
 
 const db = new Dexie('LifePlannerDB') as Dexie & {
   tasks: EntityTable<Task, 'id'>;
@@ -10,6 +10,9 @@ const db = new Dexie('LifePlannerDB') as Dexie & {
   routineCompletions: EntityTable<RoutineCompletion, 'id'>;
   userProfile: EntityTable<UserProfile, 'id'>;
   chatMessages: EntityTable<ChatMessage, 'id'>;
+  checkLists: EntityTable<CheckList, 'id'>;
+  checkListItems: EntityTable<CheckListItem, 'id'>;
+  purchaseHistory: EntityTable<PurchaseHistory, 'id'>;
 };
 
 db.version(1).stores({
@@ -135,6 +138,34 @@ db.version(12).stores({
   routineCompletions: '++id, routineId, date, [routineId+date]',
   userProfile: '++id',
   chatMessages: '++id, createdAt',
+});
+
+db.version(13).stores({
+  tasks: '++id, categoryId, completed, dueDate, createdAt, completedAt, block, parentId, startDate, calendarDisplay, isFolder, reminder',
+  categories: '++id, name, order, type, parentId',
+  reflections: '++id, date',
+  settings: '++id',
+  routines: '++id, block, order, startTime',
+  routineCompletions: '++id, routineId, date, [routineId+date]',
+  userProfile: '++id',
+  chatMessages: '++id, createdAt',
+  checkLists: '++id, type, order',
+  checkListItems: '++id, listId, checked, order',
+  purchaseHistory: '++id, listId, purchasedAt',
+});
+
+db.version(14).stores({
+  tasks: '++id, categoryId, completed, dueDate, createdAt, completedAt, block, parentId, startDate, calendarDisplay, isFolder, reminder',
+  categories: '++id, name, order, type, parentId',
+  reflections: '++id, date',
+  settings: '++id',
+  routines: '++id, block, order, startTime',
+  routineCompletions: '++id, routineId, date, [routineId+date]',
+  userProfile: '++id',
+  chatMessages: '++id, createdAt',
+  checkLists: '++id, type, order, categoryId',
+  checkListItems: '++id, listId, checked, order',
+  purchaseHistory: '++id, listId, purchasedAt',
 });
 
 export { db };

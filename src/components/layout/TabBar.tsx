@@ -1,6 +1,6 @@
 'use client';
 
-type Tab = 'today' | 'tasks';
+type Tab = 'today' | 'tasks' | 'lists';
 
 interface TabBarProps {
   activeTab: Tab;
@@ -23,9 +23,19 @@ function TasksIcon({ active }: { active: boolean }) {
   );
 }
 
+function ListsIcon({ active }: { active: boolean }) {
+  return (
+    <svg className={`w-5 h-5 ${active ? 'text-[var(--accent)]' : 'text-gray-400 dark:text-gray-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 2 : 1.5} d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={active ? 2 : 1.5} d="M9 12.75L11.25 15 15 9.75" />
+    </svg>
+  );
+}
+
 const tabConfig: { id: Tab; label: string; Icon: React.ComponentType<{ active: boolean }> }[] = [
   { id: 'today', label: '今日', Icon: TodayIcon },
   { id: 'tasks', label: 'タスク', Icon: TasksIcon },
+  { id: 'lists', label: 'リスト', Icon: ListsIcon },
 ];
 
 export default function TabBar({ activeTab, onTabChange }: TabBarProps) {

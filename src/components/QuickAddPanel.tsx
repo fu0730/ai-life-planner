@@ -81,14 +81,11 @@ export default function QuickAddPanel({ isOpen, onClose, onAdd, onOpenRoutineMod
   };
 
   return (
-    <div className="fixed inset-0 z-50" onClick={handleClose}>
-      {/* 背景オーバーレイ */}
-      <div className="absolute inset-0 bg-black/20 animate-overlay" />
-
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20 animate-overlay" onClick={handleClose}>
       {/* パネル */}
       <div
-        className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-2xl px-5 pt-5 pb-6 animate-slide-up safe-area-bottom"
-        style={{ boxShadow: '0 -4px 30px rgba(0,0,0,0.08)' }}
+        className="bg-white dark:bg-gray-800 w-full max-w-lg mx-4 rounded-2xl px-5 pt-5 pb-6 animate-slide-up max-h-[85vh] overflow-y-auto"
+        style={{ boxShadow: '0 4px 30px rgba(0,0,0,0.08)' }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* テキスト入力 */}

@@ -18,13 +18,16 @@ import { db } from '@/lib/db';
 import { seedDefaultCategories } from '@/lib/seed';
 import { getSettings } from '@/lib/settings';
 import { useLiveQuery } from 'dexie-react-hooks';
-import type { Task, Routine, Settings } from '@/types';
+import ListView from '@/components/ListView';
+import AddListModal from '@/components/AddListModal';
+import type { Task, Routine, Settings, CheckList, ListType } from '@/types';
 
-type Tab = 'today' | 'tasks';
+type Tab = 'today' | 'tasks' | 'lists';
 
 const tabTitles: Record<Tab, string> = {
   today: '今日',
   tasks: 'タスク',
+  lists: 'リスト',
 };
 
 export default function Home() {
@@ -41,6 +44,8 @@ export default function Home() {
   const [parentTask, setParentTask] = useState<Task | null>(null);
   const [editingRoutine, setEditingRoutine] = useState<Routine | null>(null);
   const [settings, setSettings] = useState<Settings | undefined>(undefined);
+  const [isListModalOpen, setIsListModalOpen] = useState(false);
+  const [editingList, setEditingList] = useState<CheckList | null>(null);
 
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
 
@@ -193,8 +198,37 @@ export default function Home() {
   };
 
   const handleOpenAddMenu = () => {
-    // 今日タブ・タスクタブ共通でクイック追加パネルを開く
-    setIsQuickAddOpen(true);
+    if (activeTab === 'lists') {
+      setEditingList(null);
+      setIsListModalOpen(true);
+    } else {
+      setIsQuickAddOpen(true);
+    }
+  };
+
+  const handleSaveList = async (data: { name: string; type: ListType; color: string; categoryId: number }) => {
+    if (editingList?.id) {
+      await db.checkLists.update(editingList.id, data);
+    } else {
+      const count = await db.checkLists.count();
+      await db.checkLists.add({
+        ...data,
+        order: count,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    setEditingList(null);
+  };
+
+  const handleEditList = (list: CheckList) => {
+    setEditingList(list);
+    setIsListModalOpen(true);
+  };
+
+  const handleDeleteList = async (listId: number) => {
+    await db.checkListItems.where('listId').equals(listId).delete();
+    await db.purchaseHistory.where('listId').equals(listId).delete();
+    await db.checkLists.delete(listId);
   };
 
   const handleQuickAdd = async (data: { title: string; categoryId: number; startDate?: string; dueDate?: string }) => {
@@ -231,6 +265,12 @@ export default function Home() {
           <div className={activeTab === 'tasks' ? '' : 'hidden'}>
             <TasksView onEditTask={handleEditTask} onAddSubtask={handleAddSubtask} settings={settings} />
           </div>
+          <div className={activeTab === 'lists' ? '' : 'hidden'}>
+            <ListView
+              onEditList={handleEditList}
+              onDeleteList={handleDeleteList}
+            />
+          </div>
         </div>
       </main>
 
@@ -251,7 +291,7 @@ export default function Home() {
       <div className="fixed bottom-20 right-4 z-10">
           <button
             onClick={handleOpenAddMenu}
-            aria-label="タスクを追加"
+            aria-label={activeTab === 'lists' ? 'リストを作成' : 'タスクを追加'}
             className="w-12 h-12 bg-[var(--accent)] text-white rounded-full hover:opacity-90 active:scale-95 transition-all flex items-center justify-center"
             style={{ boxShadow: '0 2px 12px rgba(59,130,246,0.3)' }}
           >
@@ -327,6 +367,18 @@ export default function Home() {
         }}
         categories={categories || []}
       />
+
+      <AddListModal
+        isOpen={isListModalOpen}
+        onClose={() => {
+          setIsListModalOpen(false);
+          setEditingList(null);
+        }}
+        onSave={handleSaveList}
+        editingList={editingList}
+        categories={(categories || []).filter(c => c.type === 'checklist')}
+      />
+
     </div>
   );
 }
