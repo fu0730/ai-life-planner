@@ -183,3 +183,11 @@ body {
   from { stroke-dashoffset: var(--circumference); }
   to { stroke-dashoffset: var(--target-offset); }
 }
+
+/* 長押し対応: スマホのコンテキストメニュー・テキスト選択を防止 */
+.long-pressable {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}

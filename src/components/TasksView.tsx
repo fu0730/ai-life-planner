@@ -34,7 +34,132 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didLongPress = useRef(false);
 
-  const handlePressStart = useCallback((task: Task) => {
+  // カテゴリ操作用state
+  const [menuCategory, setMenuCategory] = useState<Category | null>(null);
+  const [menuSubCategory, setMenuSubCategory] = useState<Category | null>(null);
+  const [editingCat, setEditingCat] = useState<{ id: number; name: string; color: string } | null>(null);
+  const [addingSubTo, setAddingSubTo] = useState<number | null>(null);
+  const [newSubName, setNewSubName] = useState('');
+  const [managingSubsCatId, setManagingSubsCatId] = useState<number | null>(null);
+  const [editingSubInManage, setEditingSubInManage] = useState<{ id: number; name: string } | null>(null);
+  const [showAddCategory, setShowAddCategory] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
+  const [newCatColor, setNewCatColor] = useState('#3B82F6');
+  const catLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const didCatLongPress = useRef(false);
+
+  const PRESET_COLORS = [
+    '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EC4899',
+    '#06B6D4', '#EF4444', '#84CC16', '#F97316', '#6366F1',
+  ];
+
+  const handleCatPressStart = useCallback((cat: Category, isSub?: boolean, e?: React.TouchEvent) => {
+    if (e) e.preventDefault();
+    didCatLongPress.current = false;
+    catLongPressTimer.current = setTimeout(() => {
+      didCatLongPress.current = true;
+      if (isSub) {
+        setMenuSubCategory(cat);
+      } else {
+        setMenuCategory(cat);
+      }
+    }, 500);
+  }, []);
+
+  const handleCatPressEnd = useCallback(() => {
+    if (catLongPressTimer.current) {
+      clearTimeout(catLongPressTimer.current);
+      catLongPressTimer.current = null;
+    }
+  }, []);
+
+  const handleCatPressMove = useCallback(() => {
+    if (catLongPressTimer.current) {
+      clearTimeout(catLongPressTimer.current);
+      catLongPressTimer.current = null;
+    }
+  }, []);
+
+  const catLongPressHandlers = (cat: Category, isSub?: boolean) => ({
+    onTouchStart: (e: React.TouchEvent) => handleCatPressStart(cat, isSub, e),
+    onTouchEnd: handleCatPressEnd,
+    onTouchMove: handleCatPressMove,
+    onMouseDown: () => handleCatPressStart(cat, isSub),
+    onMouseUp: handleCatPressEnd,
+    onMouseLeave: handleCatPressEnd,
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  });
+
+  const handleDeleteCategory = async (id: number) => {
+    const tasksInCat = await db.tasks.where('categoryId').equals(id).count();
+    if (tasksInCat > 0) {
+      alert(`このカテゴリには${tasksInCat}個のタスクがあります。先にタスクを移動してください。`);
+      return;
+    }
+    const allCats = await db.categories.toArray();
+    const subs = allCats.filter(c => c.parentId === id);
+    for (const sub of subs) {
+      const subTasks = await db.tasks.where('categoryId').equals(sub.id!).count();
+      if (subTasks > 0) {
+        alert(`サブカテゴリ「${sub.name}」にタスクがあります。先にタスクを移動してください。`);
+        return;
+      }
+    }
+    const subIds = subs.map(s => s.id!).filter(Boolean);
+    if (subIds.length > 0) await db.categories.bulkDelete(subIds);
+    await db.categories.delete(id);
+  };
+
+  const handleDeleteSubCategory = async (id: number) => {
+    const tasksInCat = await db.tasks.where('categoryId').equals(id).count();
+    if (tasksInCat > 0) {
+      alert(`このサブカテゴリにはタスクがあります。先にタスクを移動してください。`);
+      return;
+    }
+    await db.categories.delete(id);
+  };
+
+  const handleSaveEditCat = async () => {
+    if (!editingCat || !editingCat.name.trim()) return;
+    await db.categories.update(editingCat.id, { name: editingCat.name.trim(), color: editingCat.color });
+    setEditingCat(null);
+  };
+
+  const handleAddCategory = async () => {
+    if (!newCatName.trim()) return;
+    const allCats = await db.categories.orderBy('order').toArray();
+    const maxOrder = allCats.length > 0 ? Math.max(...allCats.map(c => c.order)) : -1;
+    await db.categories.add({
+      name: newCatName.trim(),
+      color: newCatColor,
+      order: maxOrder + 1,
+      type: 'task',
+    });
+    setNewCatName('');
+    setNewCatColor('#3B82F6');
+    setShowAddCategory(false);
+  };
+
+  const handleAddSubCategory = async (parentId: number) => {
+    if (!newSubName.trim()) return;
+    const parent = categories?.find(c => c.id === parentId);
+    if (!parent) return;
+    const allCats = await db.categories.toArray();
+    const subs = allCats.filter(c => c.parentId === parentId);
+    const maxOrder = subs.length > 0 ? Math.max(...subs.map(s => s.order)) : -1;
+    await db.categories.add({
+      name: newSubName.trim(),
+      color: parent.color,
+      order: maxOrder + 1,
+      type: parent.type,
+      parentId,
+    });
+    setNewSubName('');
+    setAddingSubTo(null);
+  };
+
+  const handlePressStart = useCallback((task: Task, e?: React.TouchEvent) => {
+    if (e) e.preventDefault();
     didLongPress.current = false;
     longPressTimer.current = setTimeout(() => {
       didLongPress.current = true;
@@ -75,12 +200,13 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
   }, [inlineEditValue, inlineEditId]);
 
   const gridLongPressHandlers = (task: Task) => ({
-    onTouchStart: () => handlePressStart(task),
+    onTouchStart: (e: React.TouchEvent) => handlePressStart(task, e),
     onTouchEnd: handlePressEnd,
     onTouchMove: handlePressMove,
     onMouseDown: () => handlePressStart(task),
     onMouseUp: handlePressEnd,
     onMouseLeave: handlePressEnd,
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
   });
 
   const startInlineAdd = useCallback((categoryId: number) => {
@@ -431,8 +557,9 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
               >
                 {/* カテゴリヘッダー */}
                 <button
-                  onClick={() => toggleGridCategory(parent.id!)}
-                  className="w-full flex items-center gap-2 px-3 py-2.5 border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
+                  onClick={() => { if (!didCatLongPress.current) toggleGridCategory(parent.id!); }}
+                  {...catLongPressHandlers(parent)}
+                  className="long-pressable w-full flex items-center gap-2 px-3 py-2.5 border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
                 >
                   <svg
                     className={`w-3 h-3 text-gray-400 transition-transform ${expandedGridCategories.has(parent.id!) ? 'rotate-90' : ''}`}
@@ -451,8 +578,163 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                 </button>
 
                 {/* タスク一覧 */}
-                {expandedGridCategories.has(parent.id!) && <div className="px-2.5 py-2 space-y-1">
-                  {displayTasks.length === 0 && (
+                {(subs.length > 0 ? !expandedGridCategories.has(parent.id!) : expandedGridCategories.has(parent.id!)) && <div className="px-2.5 py-2 space-y-1">
+                  {/* サブカテゴリ（授業名） */}
+                  {subs.map(sub => {
+                    const subTasks = getTasksForCategory(sub.id!);
+                    const subActive = subTasks.filter(t => !t.completed);
+                    const subCompleted = subTasks.filter(t => t.completed);
+                    const subSorted = sortTasks(subActive);
+                    const subDisplay = [...subSorted, ...(showCompleted ? subCompleted : [])];
+                    return (
+                      <div key={sub.id} className="rounded-lg overflow-hidden">
+                        {/* 授業名ヘッダー */}
+                        <button
+                          onClick={() => { if (!didCatLongPress.current) toggleSub(sub.id!); }}
+                          {...catLongPressHandlers(sub, true)}
+                          className="long-pressable w-full flex items-center gap-1.5 px-2 py-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors"
+                        >
+                          <svg
+                            className={`w-2.5 h-2.5 text-gray-400 transition-transform flex-shrink-0 ${collapsedSubs.has(sub.id!) ? '' : 'rotate-90'}`}
+                            fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                          >
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          <div className="w-0.5 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: parent.color, opacity: 0.6 }} />
+                          <span className="text-[11px] font-semibold text-gray-600 dark:text-gray-300 truncate">{sub.name}</span>
+                          {subActive.length > 0 && (
+                            <span className="text-[9px] text-gray-400 dark:text-gray-500 ml-auto bg-gray-100 dark:bg-gray-700 px-1 py-0.5 rounded-full flex-shrink-0">
+                              {subActive.length}
+                            </span>
+                          )}
+                        </button>
+                        {!collapsedSubs.has(sub.id!) && (
+                          <div className="pl-3 pr-1 pb-1.5 space-y-0.5">
+                            {subDisplay.map(task => {
+                              const children = getChildTasks(task.id!);
+                              const taskHasChildren = hasChildren(task);
+                              if (taskHasChildren) {
+                                const activeChildren = children.filter(c => !c.completed);
+                                const completedChildren = children.filter(c => c.completed);
+                                const displayChildren = [...activeChildren, ...(showCompleted ? completedChildren : [])];
+                                return (
+                                  <div key={task.id} className="rounded border border-gray-100 dark:border-gray-700/40 overflow-hidden mb-0.5">
+                                    <div
+                                      className="long-pressable flex items-center gap-1.5 px-2 py-1.5 bg-gray-50/50 dark:bg-gray-700/20 cursor-pointer hover:bg-gray-100/50 dark:hover:bg-gray-700/40 transition-colors"
+                                      onClick={() => { if (!didLongPress.current) toggleGridTask(task.id!); }}
+                                      {...gridLongPressHandlers(task)}
+                                    >
+                                      <svg
+                                        className={`w-2.5 h-2.5 text-gray-400 transition-transform flex-shrink-0 ${expandedGridTasks.has(task.id!) ? 'rotate-90' : ''}`}
+                                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                      >
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                      </svg>
+                                      <span className={`text-[11px] font-medium truncate flex-1 ${
+                                        task.completed ? 'text-gray-400 dark:text-gray-500 line-through' : 'text-gray-700 dark:text-gray-200'
+                                      }`}>{task.title}</span>
+                                      {children.length > 0 && (
+                                        <MiniDonut completed={children.filter(c => c.completed).length} total={children.length} size={12} />
+                                      )}
+                                    </div>
+                                    {expandedGridTasks.has(task.id!) && (
+                                      <div className="px-2 py-1 space-y-0.5">
+                                        {displayChildren.map(child => (
+                                          <div
+                                            key={child.id}
+                                            className={`long-pressable flex items-center gap-1.5 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-600/30 transition-colors ${
+                                              child.completed ? 'opacity-50' : ''
+                                            }`}
+                                            {...gridLongPressHandlers(child)}
+                                          >
+                                            <button
+                                              onClick={(e) => { e.stopPropagation(); if (child.id !== undefined) toggleTask(child.id); }}
+                                              className={`w-[13px] h-[13px] rounded-full border-[1.5px] flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
+                                                child.completed ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                                              }`}
+                                            >
+                                              {child.completed && (
+                                                <svg className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                                </svg>
+                                              )}
+                                            </button>
+                                            <p className={`text-[10px] leading-snug truncate flex-1 ${
+                                              child.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-500 dark:text-gray-400'
+                                            }`}>{child.title}</p>
+                                          </div>
+                                        ))}
+                                        {!task.completed && (
+                                          inlineSubAddParentId === task.id ? (
+                                            <div className="flex items-center gap-1.5 px-1.5 py-1">
+                                              <svg className="w-2.5 h-2.5 text-gray-300 dark:text-gray-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                                              </svg>
+                                              <input
+                                                ref={inlineSubAddRef}
+                                                type="text"
+                                                value={inlineSubAddValue}
+                                                onChange={(e) => setInlineSubAddValue(e.target.value)}
+                                                onBlur={saveInlineSubAdd}
+                                                onKeyDown={(e) => {
+                                                  if (e.key === 'Enter') { e.preventDefault(); saveInlineSubAdd(); }
+                                                  if (e.key === 'Escape') { setInlineSubAddParentId(null); setInlineSubAddValue(''); }
+                                                }}
+                                                placeholder="課題名"
+                                                className="flex-1 text-[10px] bg-transparent border-b-2 border-blue-400 focus:outline-none text-gray-600 dark:text-gray-300 py-0.5"
+                                                autoFocus
+                                              />
+                                            </div>
+                                          ) : (
+                                            <button
+                                              onClick={() => startInlineSubAdd(task.id!)}
+                                              className="flex items-center gap-1 px-1.5 py-1 text-[10px] text-gray-400 dark:text-gray-500 hover:text-[var(--accent)] transition-colors w-full"
+                                            >
+                                              <svg className="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                                              </svg>
+                                              追加
+                                            </button>
+                                          )
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              return (
+                                <div
+                                  key={task.id}
+                                  className={`long-pressable flex items-center gap-2 px-1.5 py-1 rounded cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-600/30 transition-colors ${
+                                    task.completed ? 'opacity-50' : ''
+                                  }`}
+                                  {...gridLongPressHandlers(task)}
+                                >
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); if (task.id !== undefined) toggleTask(task.id); }}
+                                    className={`w-[14px] h-[14px] rounded-full border-[1.5px] flex items-center justify-center flex-shrink-0 transition-all active:scale-90 ${
+                                      task.completed ? 'bg-green-500 border-green-500' : 'border-gray-300 dark:border-gray-600 hover:border-green-400'
+                                    }`}
+                                  >
+                                    {task.completed && (
+                                      <svg className="w-1.5 h-1.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                                      </svg>
+                                    )}
+                                  </button>
+                                  <p className={`text-[11px] leading-snug truncate flex-1 ${
+                                    task.completed ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-300'
+                                  }`}>{task.title}</p>
+                                </div>
+                              );
+                            })}
+                            {renderInlineAdd(sub.id!)}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {displayTasks.length === 0 && subs.length === 0 && (
                     <p className="text-[11px] text-gray-300 dark:text-gray-600 text-center py-2">なし</p>
                   )}
                   {displayTasks.map(task => {
@@ -469,7 +751,7 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                         >
                           {/* 親タスクヘッダー */}
                           <div
-                            className="flex items-center gap-2 px-2.5 py-2 border-b border-gray-200/60 dark:border-gray-600/40 cursor-pointer hover:bg-gray-100/50 dark:hover:bg-gray-700/50 transition-colors"
+                            className="long-pressable flex items-center gap-2 px-2.5 py-2 border-b border-gray-200/60 dark:border-gray-600/40 cursor-pointer hover:bg-gray-100/50 dark:hover:bg-gray-700/50 transition-colors"
                             onClick={() => { if (!didLongPress.current) toggleGridTask(task.id!); }}
                             {...gridLongPressHandlers(task)}
                           >
@@ -555,7 +837,7 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                             {displayChildren.map(child => (
                               <div
                                 key={child.id}
-                                className={`flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-600/30 transition-colors ${
+                                className={`long-pressable flex items-center gap-2 px-2 py-1 rounded cursor-pointer hover:bg-gray-100/60 dark:hover:bg-gray-600/30 transition-colors ${
                                   child.completed ? 'opacity-50' : ''
                                 }`}
                                 {...gridLongPressHandlers(child)}
@@ -655,7 +937,7 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                     return (
                       <div
                         key={task.id}
-                        className={`flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors ${
+                        className={`long-pressable flex items-center gap-2 px-2 py-1.5 rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 transition-colors ${
                           task.completed ? 'opacity-50' : ''
                         }`}
                         {...gridLongPressHandlers(task)}
@@ -719,11 +1001,82 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                       </div>
                     );
                   })}
+                  {/* サブカテゴリ追加フォーム（グリッド） */}
+                  {addingSubTo === parent.id && (
+                    <div className="flex gap-2 py-1">
+                      <input
+                        type="text"
+                        value={newSubName}
+                        onChange={(e) => setNewSubName(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') handleAddSubCategory(parent.id!); if (e.key === 'Escape') { setAddingSubTo(null); setNewSubName(''); } }}
+                        placeholder="サブカテゴリの名前"
+                        className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                        autoFocus
+                      />
+                      <button
+                        onClick={() => handleAddSubCategory(parent.id!)}
+                        className="px-2 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600"
+                      >
+                        追加
+                      </button>
+                    </div>
+                  )}
                   {renderInlineAdd(parent.id!)}
                 </div>}
               </div>
             );
           })}
+
+          {/* カテゴリ追加（グリッド） */}
+          {showAddCategory ? (
+            <div className="col-span-2 rounded-xl bg-gray-50 dark:bg-gray-800/50 p-4 space-y-3">
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); if (e.key === 'Escape') { setShowAddCategory(false); setNewCatName(''); } }}
+                placeholder="カテゴリ名"
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-2">
+                {PRESET_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setNewCatColor(color)}
+                    className={`w-7 h-7 rounded-full transition-transform ${
+                      newCatColor === color ? 'scale-125 ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-gray-400' : ''
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowAddCategory(false); setNewCatName(''); }}
+                  className="flex-1 py-2 text-xs text-gray-500 bg-gray-200 dark:bg-gray-600 rounded-lg"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleAddCategory}
+                  className="flex-1 py-2 text-xs text-white bg-blue-500 rounded-lg"
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddCategory(true)}
+              className="col-span-2 flex items-center justify-center gap-1.5 py-3 text-xs text-gray-400 dark:text-gray-500 hover:text-[var(--accent)] dark:hover:text-[var(--accent)] transition-colors rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/30"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              カテゴリを追加
+            </button>
+          )}
         </div>
       ) : (
         /* リスト表示 */
@@ -734,7 +1087,7 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
             const activeCount = allTasks.filter(t => !t.completed).length;
             const isCollapsed = userToggledCategories.has(parent.id!)
               ? collapsedCategories.has(parent.id!)
-              : allTasks.length === 0;
+              : allTasks.length === 0 && subs.length === 0;
 
             const directTasks = getTasksForCategory(parent.id!);
 
@@ -742,8 +1095,9 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
               <div key={parent.id} className="rounded-xl overflow-hidden">
                 {/* 親カテゴリヘッダー */}
                 <button
-                  onClick={() => toggleCategory(parent.id!)}
-                  className="w-full flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                  onClick={() => { if (!didCatLongPress.current) toggleCategory(parent.id!); }}
+                  {...catLongPressHandlers(parent)}
+                  className="long-pressable w-full flex items-center gap-3 px-4 py-3 bg-gray-50 dark:bg-gray-800/50 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
                 >
                   <svg
                     className={`w-4 h-4 text-gray-400 transition-transform ${isCollapsed ? '' : 'rotate-90'}`}
@@ -767,25 +1121,31 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                       const isSubCollapsed = collapsedSubs.has(sub.id!);
 
                       return (
-                        <div key={sub.id}>
+                        <div key={sub.id} className="mb-1">
+                          {/* サブカテゴリヘッダー（授業名） */}
                           <button
-                            onClick={() => toggleSub(sub.id!)}
-                            className="w-full flex items-center gap-2 px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
+                            onClick={() => { if (!didCatLongPress.current) toggleSub(sub.id!); }}
+                            {...catLongPressHandlers(sub, true)}
+                            className="long-pressable w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800/30 transition-colors"
                           >
                             <svg
-                              className={`w-3 h-3 text-gray-300 transition-transform ${isSubCollapsed ? '' : 'rotate-90'}`}
+                              className={`w-3 h-3 text-gray-400 transition-transform flex-shrink-0 ${isSubCollapsed ? '' : 'rotate-90'}`}
                               fill="none" stroke="currentColor" viewBox="0 0 24 24"
                             >
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                             </svg>
-                            <span className="text-xs font-medium text-gray-500 dark:text-gray-400">{sub.name}</span>
-                            <span className="text-[10px] text-gray-300 dark:text-gray-600 ml-auto">
-                              {subActiveCount > 0 ? `${subActiveCount}` : ''}
-                            </span>
+                            <div className="w-1 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: parent.color, opacity: 0.6 }} />
+                            <span className="text-xs font-semibold text-gray-600 dark:text-gray-300">{sub.name}</span>
+                            {subActiveCount > 0 && (
+                              <span className="text-[10px] text-gray-400 dark:text-gray-500 ml-auto bg-gray-100 dark:bg-gray-700 px-1.5 py-0.5 rounded-full">
+                                {subActiveCount}
+                              </span>
+                            )}
                           </button>
                           {!isSubCollapsed && (
-                            <div className="pl-3 space-y-1 pb-1">
+                            <div className="pl-6 space-y-1 pb-1">
                               {renderTaskList(subTasks, sub)}
+                              {renderInlineAdd(sub.id!)}
                             </div>
                           )}
                         </div>
@@ -800,6 +1160,27 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
                         {renderTaskList(directTasks, parent)}
                       </div>
                     )}
+                    {/* サブカテゴリ追加フォーム */}
+                    {addingSubTo === parent.id && (
+                      <div className="flex gap-2 px-3 py-2">
+                        <input
+                          type="text"
+                          value={newSubName}
+                          onChange={(e) => setNewSubName(e.target.value)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') handleAddSubCategory(parent.id!); if (e.key === 'Escape') { setAddingSubTo(null); setNewSubName(''); } }}
+                          placeholder="サブカテゴリの名前"
+                          className="flex-1 px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => handleAddSubCategory(parent.id!)}
+                          className="px-3 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600"
+                        >
+                          追加
+                        </button>
+                      </div>
+                    )}
+
                     {/* カテゴリ内タスク追加 */}
                     <div className="px-3 pb-1">
                       {renderInlineAdd(parent.id!)}
@@ -809,17 +1190,67 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
               </div>
             );
           })}
+
+          {/* カテゴリ追加 */}
+          {showAddCategory ? (
+            <div className="rounded-xl bg-gray-50 dark:bg-gray-800/50 p-4 space-y-3">
+              <input
+                type="text"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleAddCategory(); if (e.key === 'Escape') { setShowAddCategory(false); setNewCatName(''); } }}
+                placeholder="カテゴリ名"
+                className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                autoFocus
+              />
+              <div className="flex flex-wrap gap-2">
+                {PRESET_COLORS.map((color) => (
+                  <button
+                    key={color}
+                    onClick={() => setNewCatColor(color)}
+                    className={`w-7 h-7 rounded-full transition-transform ${
+                      newCatColor === color ? 'scale-125 ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-gray-400' : ''
+                    }`}
+                    style={{ backgroundColor: color }}
+                  />
+                ))}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setShowAddCategory(false); setNewCatName(''); }}
+                  className="flex-1 py-2 text-xs text-gray-500 bg-gray-200 dark:bg-gray-600 rounded-lg"
+                >
+                  キャンセル
+                </button>
+                <button
+                  onClick={handleAddCategory}
+                  className="flex-1 py-2 text-xs text-white bg-blue-500 rounded-lg"
+                >
+                  追加
+                </button>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowAddCategory(true)}
+              className="w-full flex items-center justify-center gap-1.5 py-3 text-xs text-gray-400 dark:text-gray-500 hover:text-[var(--accent)] dark:hover:text-[var(--accent)] transition-colors rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800/30"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+              </svg>
+              カテゴリを追加
+            </button>
+          )}
         </div>
       )}
 
       {/* グリッド表示用アクションシート */}
       {menuTask && typeof document !== 'undefined' && createPortal(
-        <div className="fixed inset-0 bg-black/30 z-[9999] animate-overlay" onClick={() => setMenuTask(null)}>
+        <div className="fixed inset-0 bg-black/30 z-[9999] flex items-center justify-center animate-overlay" onClick={() => setMenuTask(null)}>
           <div
-            className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-800 rounded-t-2xl p-5 pb-8 animate-slide-up"
+            className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm mx-4 p-5 animate-slide-up"
             onClick={e => e.stopPropagation()}
           >
-            <div className="w-10 h-1 bg-gray-300 dark:bg-gray-600 rounded-full mx-auto mb-4" />
             <p className="text-sm font-medium text-gray-800 dark:text-gray-100 mb-4 truncate px-1">{menuTask.title}</p>
             <div className="space-y-1">
               <button
@@ -858,6 +1289,265 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
             >
               キャンセル
             </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* カテゴリ用アクションシート */}
+      {menuCategory && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/30 z-[9999] flex items-center justify-center animate-overlay" onClick={() => setMenuCategory(null)}>
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm mx-4 p-5 animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 mb-4 px-1">
+              <div className="w-3 h-3 rounded-full" style={{ backgroundColor: menuCategory.color }} />
+              <p className="text-sm font-medium text-gray-800 dark:text-gray-100">{menuCategory.name}</p>
+            </div>
+            <div className="space-y-1">
+              <button
+                onClick={() => { setEditingCat({ id: menuCategory.id!, name: menuCategory.name, color: menuCategory.color }); setMenuCategory(null); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+              >
+                <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                </svg>
+                <span className="text-sm text-gray-700 dark:text-gray-200">編集</span>
+              </button>
+              <button
+                onClick={() => { setManagingSubsCatId(menuCategory.id!); setMenuCategory(null); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+              >
+                <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
+                </svg>
+                <span className="text-sm text-gray-700 dark:text-gray-200">サブカテゴリ管理</span>
+              </button>
+              <button
+                onClick={() => { handleDeleteCategory(menuCategory.id!); setMenuCategory(null); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
+              >
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+                <span className="text-sm text-red-500">削除</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setMenuCategory(null)}
+              className="w-full mt-3 py-3 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* サブカテゴリ用アクションシート */}
+      {menuSubCategory && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/30 z-[9999] flex items-center justify-center animate-overlay" onClick={() => setMenuSubCategory(null)}>
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm mx-4 p-5 animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            <p className="text-sm font-medium text-gray-800 dark:text-gray-100 mb-4 px-1">{menuSubCategory.name}</p>
+            <div className="space-y-1">
+              <button
+                onClick={() => { setEditingCat({ id: menuSubCategory.id!, name: menuSubCategory.name, color: menuSubCategory.color }); setMenuSubCategory(null); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors text-left"
+              >
+                <svg className="w-5 h-5 text-gray-500 dark:text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931zm0 0L19.5 7.125M18 14v4.75A2.25 2.25 0 0115.75 21H5.25A2.25 2.25 0 013 18.75V8.25A2.25 2.25 0 015.25 6H10" />
+                </svg>
+                <span className="text-sm text-gray-700 dark:text-gray-200">編集</span>
+              </button>
+              <button
+                onClick={() => { handleDeleteSubCategory(menuSubCategory.id!); setMenuSubCategory(null); }}
+                className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors text-left"
+              >
+                <svg className="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0" />
+                </svg>
+                <span className="text-sm text-red-500">削除</span>
+              </button>
+            </div>
+            <button
+              onClick={() => setMenuSubCategory(null)}
+              className="w-full mt-3 py-3 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+            >
+              キャンセル
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* サブカテゴリ管理モーダル */}
+      {managingSubsCatId !== null && categories && typeof document !== 'undefined' && createPortal(
+        (() => {
+          const parentCat = categories.find(c => c.id === managingSubsCatId);
+          const subsOfCat = categories.filter(c => c.parentId === managingSubsCatId).sort((a, b) => a.order - b.order);
+          if (!parentCat) return null;
+          return (
+            <div className="fixed inset-0 bg-black/30 z-[9999] flex items-center justify-center animate-overlay" onClick={() => { setManagingSubsCatId(null); setEditingSubInManage(null); setNewSubName(''); setAddingSubTo(null); }}>
+              <div
+                className="bg-white dark:bg-gray-800 rounded-2xl w-full max-w-sm mx-4 p-5 animate-slide-up max-h-[80vh] overflow-y-auto"
+                onClick={e => e.stopPropagation()}
+              >
+                    <div className="flex items-center gap-2 mb-5">
+                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: parentCat.color }} />
+                  <h3 className="text-base font-bold text-gray-800 dark:text-gray-100">{parentCat.name}</h3>
+                  <span className="text-xs text-gray-400 dark:text-gray-500">のサブカテゴリ</span>
+                </div>
+
+                {/* サブカテゴリ一覧 */}
+                <div className="space-y-2 mb-4">
+                  {subsOfCat.length === 0 && (
+                    <p className="text-sm text-gray-400 dark:text-gray-500 text-center py-4">サブカテゴリはまだないよ</p>
+                  )}
+                  {subsOfCat.map(sub => (
+                    <div key={sub.id} className="flex items-center gap-3 px-3 py-2.5 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                      {editingSubInManage && editingSubInManage.id === sub.id ? (
+                        <div className="flex-1 flex gap-2">
+                          <input
+                            type="text"
+                            value={editingSubInManage.name}
+                            onChange={(e) => setEditingSubInManage({ ...editingSubInManage!, name: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter' && editingSubInManage!.name.trim()) {
+                                db.categories.update(sub.id!, { name: editingSubInManage!.name.trim() });
+                                setEditingSubInManage(null);
+                              }
+                              if (e.key === 'Escape') setEditingSubInManage(null);
+                            }}
+                            className="flex-1 px-2 py-1 border border-gray-200 dark:border-gray-600 rounded-lg text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => {
+                              if (editingSubInManage!.name.trim()) {
+                                db.categories.update(sub.id!, { name: editingSubInManage!.name.trim() });
+                                setEditingSubInManage(null);
+                              }
+                            }}
+                            className="px-2 py-1 text-xs text-white bg-blue-500 rounded-lg"
+                          >
+                            保存
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="w-1 h-4 rounded-full" style={{ backgroundColor: parentCat.color, opacity: 0.6 }} />
+                          <span className="text-sm text-gray-700 dark:text-gray-200 flex-1">{sub.name}</span>
+                          <button
+                            onClick={() => setEditingSubInManage({ id: sub.id!, name: sub.name })}
+                            className="text-xs text-gray-400 hover:text-blue-500 px-2 py-1"
+                          >
+                            編集
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSubCategory(sub.id!)}
+                            className="text-xs text-gray-400 hover:text-red-500 px-2 py-1"
+                          >
+                            削除
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* 追加フォーム */}
+                {addingSubTo === managingSubsCatId ? (
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={newSubName}
+                      onChange={(e) => setNewSubName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleAddSubCategory(managingSubsCatId);
+                        if (e.key === 'Escape') { setAddingSubTo(null); setNewSubName(''); }
+                      }}
+                      placeholder="サブカテゴリ名を入力"
+                      className="flex-1 px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-xl text-sm bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      autoFocus
+                    />
+                    <button
+                      onClick={() => handleAddSubCategory(managingSubsCatId)}
+                      className="px-4 py-2 text-sm text-white bg-blue-500 rounded-xl hover:bg-blue-600"
+                    >
+                      追加
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => { setAddingSubTo(managingSubsCatId); setNewSubName(''); }}
+                    className="w-full flex items-center justify-center gap-1.5 py-3 text-sm text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-xl transition-colors mb-4"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.5v15m7.5-7.5h-15" />
+                    </svg>
+                    サブカテゴリを追加
+                  </button>
+                )}
+
+                <button
+                  onClick={() => { setManagingSubsCatId(null); setEditingSubInManage(null); setNewSubName(''); setAddingSubTo(null); }}
+                  className="w-full py-3 text-sm text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-gray-700 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          );
+        })(),
+        document.body
+      )}
+
+      {/* カテゴリ編集モーダル */}
+      {editingCat && typeof document !== 'undefined' && createPortal(
+        <div className="fixed inset-0 bg-black/30 z-[9999] flex items-center justify-center animate-overlay" onClick={() => setEditingCat(null)}>
+          <div
+            className="bg-white dark:bg-gray-800 rounded-2xl p-5 w-full max-w-sm mx-4 animate-slide-up"
+            onClick={e => e.stopPropagation()}
+          >
+            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-4">カテゴリを編集</h3>
+            <input
+              type="text"
+              value={editingCat.name}
+              onChange={(e) => setEditingCat({ ...editingCat, name: e.target.value })}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleSaveEditCat(); }}
+              className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm mb-3 bg-white dark:bg-gray-700 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-300"
+              autoFocus
+            />
+            <div className="flex flex-wrap gap-2 mb-4">
+              {PRESET_COLORS.map((color) => (
+                <button
+                  key={color}
+                  onClick={() => setEditingCat({ ...editingCat, color })}
+                  className={`w-7 h-7 rounded-full transition-transform ${
+                    editingCat.color === color ? 'scale-125 ring-2 ring-offset-2 dark:ring-offset-gray-800 ring-gray-400' : ''
+                  }`}
+                  style={{ backgroundColor: color }}
+                />
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setEditingCat(null)}
+                className="flex-1 py-2 text-xs text-gray-500 bg-gray-200 dark:bg-gray-600 rounded-lg"
+              >
+                キャンセル
+              </button>
+              <button
+                onClick={handleSaveEditCat}
+                className="flex-1 py-2 text-xs text-white bg-blue-500 rounded-lg"
+              >
+                保存
+              </button>
+            </div>
           </div>
         </div>,
         document.body
