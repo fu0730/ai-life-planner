@@ -13,11 +13,11 @@ import SettingsView from '@/components/SettingsView';
 import ProfileView from '@/components/ProfileView';
 import ChatView from '@/components/ChatView';
 import SetupFlow from '@/components/SetupFlow';
+import AuthScreen from '@/components/AuthScreen';
 import { scheduleReminder, cancelReminder } from '@/lib/push';
-import { db } from '@/lib/db';
-import { seedDefaultCategories } from '@/lib/seed';
-import { getSettings } from '@/lib/settings';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useAuth } from '@/lib/auth-context';
+import { useCategories, useSettingsData, useDataOperations } from '@/lib/use-data';
+import { migrateLocalToSupabase } from '@/lib/sync';
 import ListView from '@/components/ListView';
 import AddListModal from '@/components/AddListModal';
 import type { Task, Routine, Settings, CheckList, ListType } from '@/types';
@@ -31,6 +31,7 @@ const tabTitles: Record<Tab, string> = {
 };
 
 export default function Home() {
+  const { user, loading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('today');
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isRoutineModalOpen, setIsRoutineModalOpen] = useState(false);
@@ -46,22 +47,41 @@ export default function Home() {
   const [settings, setSettings] = useState<Settings | undefined>(undefined);
   const [isListModalOpen, setIsListModalOpen] = useState(false);
   const [editingList, setEditingList] = useState<CheckList | null>(null);
+  const [migrating, setMigrating] = useState(false);
 
-  const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
+  const categories = useCategories();
+  const settingsFromDb = useSettingsData();
+  const ops = useDataOperations();
+
+  // 初期化
+  useEffect(() => {
+    ops.seedDefaultCategories();
+    ops.getSettings().then(setSettings);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ops.isOnline]);
 
   // settingsの監視
-  const settingsFromDb = useLiveQuery(() => db.settings.toCollection().first());
-
-  useEffect(() => {
-    seedDefaultCategories();
-    getSettings().then(setSettings);
-  }, []);
-
   useEffect(() => {
     if (settingsFromDb) {
       setSettings(settingsFromDb);
     }
   }, [settingsFromDb]);
+
+  // 初回ログイン時にローカルデータをSupabaseに移行
+  useEffect(() => {
+    if (user && !migrating) {
+      setMigrating(true);
+      migrateLocalToSupabase().then((result) => {
+        if (result.migrated) {
+          console.log('Local data migrated to Supabase');
+          // 移行後にSettingsを再取得
+          ops.getSettings().then(setSettings);
+        }
+        setMigrating(false);
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   // ダークモード適用 + themeColor切替
   useEffect(() => {
@@ -75,9 +95,34 @@ export default function Home() {
     }
   }, [settings]);
 
+  // 認証ローディング中
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+        <div className="text-[var(--muted)]">読み込み中...</div>
+      </div>
+    );
+  }
+
+  // 未ログイン → 認証画面
+  if (!user) {
+    return <AuthScreen />;
+  }
+
+  // データ移行中
+  if (migrating) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--background)]">
+        <div className="text-center">
+          <div className="text-[var(--muted)] mb-2">データを同期中...</div>
+          <div className="text-xs text-[var(--muted)]">ローカルデータをクラウドに移行しています</div>
+        </div>
+      </div>
+    );
+  }
 
   const handleSetupComplete = () => {
-    getSettings().then(setSettings);
+    ops.getSettings().then(setSettings);
   };
 
   // セットアップ未完了なら表示
@@ -90,7 +135,7 @@ export default function Home() {
     subtasks?: { id?: number; title: string; startDate?: string; dueDate?: string }[]
   ) => {
     if (editingTask?.id) {
-      await db.tasks.update(editingTask.id, taskData);
+      await ops.updateTask(editingTask.id, taskData);
 
       // リマインド通知のスケジュール更新
       if (taskData.reminder && taskData.dueDate) {
@@ -101,23 +146,23 @@ export default function Home() {
 
       // サブタスクの更新処理
       if (subtasks !== undefined) {
-        const existing = await db.tasks.where('parentId').equals(editingTask.id).toArray();
+        const existing = await ops.getTasksByParentId(editingTask.id);
         const existingIds = existing.map(s => s.id!);
         const keptIds = subtasks.filter(s => s.id).map(s => s.id!);
 
         // 削除されたサブタスク
         const toDelete = existingIds.filter(id => !keptIds.includes(id));
         if (toDelete.length > 0) {
-          await db.tasks.bulkDelete(toDelete);
+          await ops.bulkDeleteTasks(toDelete);
         }
 
         // 既存サブタスクの更新 & 新規追加
         const now = new Date().toISOString();
         for (const sub of subtasks) {
           if (sub.id) {
-            await db.tasks.update(sub.id, { title: sub.title, startDate: sub.startDate, dueDate: sub.dueDate });
+            await ops.updateTask(sub.id, { title: sub.title, startDate: sub.startDate, dueDate: sub.dueDate });
           } else {
-            await db.tasks.add({
+            await ops.addTask({
               title: sub.title,
               categoryId: taskData.categoryId,
               priority: taskData.priority,
@@ -131,7 +176,7 @@ export default function Home() {
         }
       }
     } else {
-      const parentId = await db.tasks.add({
+      const parentId = await ops.addTask({
         ...taskData,
         completed: false,
         createdAt: new Date().toISOString(),
@@ -145,7 +190,7 @@ export default function Home() {
       // サブタスクも一緒に作成
       if (subtasks && subtasks.length > 0) {
         const now = new Date().toISOString();
-        await db.tasks.bulkAdd(
+        await ops.bulkAddTasks(
           subtasks.map(sub => ({
             title: sub.title,
             categoryId: taskData.categoryId,
@@ -167,11 +212,10 @@ export default function Home() {
     routineData: Omit<Routine, 'id' | 'createdAt'>
   ) => {
     if (editingRoutine?.id) {
-      await db.routines.update(editingRoutine.id, routineData);
+      await ops.updateRoutine(editingRoutine.id, routineData);
     } else {
-      // orderは既存のルーティン数で自動設定
-      const count = await db.routines.where('block').equals(routineData.block).count();
-      await db.routines.add({
+      const count = await ops.countRoutinesByBlock(routineData.block);
+      await ops.addRoutine({
         ...routineData,
         order: count,
         createdAt: new Date().toISOString(),
@@ -208,10 +252,10 @@ export default function Home() {
 
   const handleSaveList = async (data: { name: string; type: ListType; color: string; categoryId: number }) => {
     if (editingList?.id) {
-      await db.checkLists.update(editingList.id, data);
+      await ops.updateCheckList(editingList.id, data);
     } else {
-      const count = await db.checkLists.count();
-      await db.checkLists.add({
+      const count = await ops.countCheckLists();
+      await ops.addCheckList({
         ...data,
         order: count,
         createdAt: new Date().toISOString(),
@@ -226,13 +270,11 @@ export default function Home() {
   };
 
   const handleDeleteList = async (listId: number) => {
-    await db.checkListItems.where('listId').equals(listId).delete();
-    await db.purchaseHistory.where('listId').equals(listId).delete();
-    await db.checkLists.delete(listId);
+    await ops.deleteCheckList(listId);
   };
 
   const handleQuickAdd = async (data: { title: string; categoryId: number; startDate?: string; dueDate?: string }) => {
-    await db.tasks.add({
+    await ops.addTask({
       title: data.title,
       categoryId: data.categoryId,
       priority: 'medium',

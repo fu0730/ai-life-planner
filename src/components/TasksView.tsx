@@ -1,9 +1,25 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { db } from '@/lib/db';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  useSortable,
+  arrayMove,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import TaskItem from './TaskItem';
 import MiniDonut from './MiniDonut';
 import { playCompleteSound } from '@/lib/sounds';
@@ -13,6 +29,44 @@ interface TasksViewProps {
   onEditTask: (task: Task) => void;
   onAddSubtask: (parentTask: Task) => void;
   settings: Settings | undefined;
+}
+
+// --- ドラッグハンドル ---
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function TaskDragHandle({ listeners, attributes }: { listeners?: any; attributes?: any }) {
+  return (
+    <button
+      className="touch-none p-1 text-gray-300 dark:text-gray-600 hover:text-gray-500 dark:hover:text-gray-400 cursor-grab active:cursor-grabbing flex-shrink-0"
+      {...listeners}
+      {...attributes}
+    >
+      <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+        <circle cx="9" cy="6" r="1.5" />
+        <circle cx="15" cy="6" r="1.5" />
+        <circle cx="9" cy="12" r="1.5" />
+        <circle cx="15" cy="12" r="1.5" />
+        <circle cx="9" cy="18" r="1.5" />
+        <circle cx="15" cy="18" r="1.5" />
+      </svg>
+    </button>
+  );
+}
+
+// --- ソート可能タスクラッパー ---
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function SortableTaskWrapper({ id, children }: { id: number; children: (props: { listeners: any; attributes: any }) => React.ReactNode }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 50 : undefined,
+  };
+  return (
+    <div ref={setNodeRef} style={style}>
+      {children({ listeners, attributes })}
+    </div>
+  );
 }
 
 export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksViewProps) {
@@ -47,6 +101,11 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
   const [newCatColor, setNewCatColor] = useState('#3B82F6');
   const catLongPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const didCatLongPress = useRef(false);
+
+  const dndSensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+  );
 
   const PRESET_COLORS = [
     '#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EC4899',
@@ -311,6 +370,9 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
 
   const sortTasks = (taskList: Task[]) => {
     return [...taskList].sort((a, b) => {
+      if (sortBy === 'manual') {
+        return (a.order ?? 0) - (b.order ?? 0);
+      }
       if (sortBy === 'priority') {
         const order = { high: 0, medium: 1, low: 2 };
         return order[a.priority] - order[b.priority];
@@ -323,6 +385,18 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   };
+
+  const handleTaskDragEnd = useCallback(async (event: DragEndEvent, taskList: Task[]) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = taskList.findIndex(t => t.id === active.id);
+    const newIndex = taskList.findIndex(t => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(taskList, oldIndex, newIndex);
+    await Promise.all(
+      reordered.map((task, i) => db.tasks.update(task.id!, { order: i }))
+    );
+  }, []);
 
   const toggleTask = async (id: number) => {
     const task = await db.tasks.get(id);
@@ -381,6 +455,7 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
     const completed = taskList.filter(t => t.completed);
     const sorted = sortTasks(active);
     const allItems = [...sorted, ...(showCompleted ? completed : [])];
+    const isManual = sortBy === 'manual';
 
     if (viewMode === 'grid') {
       return (
@@ -402,32 +477,56 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
       );
     }
 
+    const renderItems = (items: Task[], draggable: boolean) =>
+      items.map(task =>
+        draggable ? (
+          <SortableTaskWrapper key={task.id} id={task.id!}>
+            {({ listeners, attributes }) => (
+              <div className="flex items-center gap-1">
+                <TaskDragHandle listeners={listeners} attributes={attributes} />
+                <div className="flex-1 min-w-0">
+                  <TaskItem
+                    task={task}
+                    category={category || getCategoryForTask(task.categoryId)}
+                    onToggle={toggleTask}
+                    onDelete={deleteTask}
+                    onEdit={onEditTask}
+                    onAddSubtask={onAddSubtask}
+                    settings={settings}
+                  />
+                </div>
+              </div>
+            )}
+          </SortableTaskWrapper>
+        ) : (
+          <TaskItem
+            key={task.id}
+            task={task}
+            category={category || getCategoryForTask(task.categoryId)}
+            onToggle={toggleTask}
+            onDelete={deleteTask}
+            onEdit={onEditTask}
+            onAddSubtask={onAddSubtask}
+            settings={settings}
+          />
+        )
+      );
+
+    if (isManual) {
+      return (
+        <DndContext sensors={dndSensors} collisionDetection={closestCenter} onDragEnd={(e) => handleTaskDragEnd(e, sorted)}>
+          <SortableContext items={sorted.map(t => t.id!)} strategy={verticalListSortingStrategy}>
+            {renderItems(sorted, true)}
+          </SortableContext>
+          {showCompleted && renderItems(completed, false)}
+        </DndContext>
+      );
+    }
+
     return (
       <>
-        {sorted.map(task => (
-          <TaskItem
-            key={task.id}
-            task={task}
-            category={category || getCategoryForTask(task.categoryId)}
-            onToggle={toggleTask}
-            onDelete={deleteTask}
-            onEdit={onEditTask}
-            onAddSubtask={onAddSubtask}
-            settings={settings}
-          />
-        ))}
-        {showCompleted && completed.map(task => (
-          <TaskItem
-            key={task.id}
-            task={task}
-            category={category || getCategoryForTask(task.categoryId)}
-            onToggle={toggleTask}
-            onDelete={deleteTask}
-            onEdit={onEditTask}
-            onAddSubtask={onAddSubtask}
-            settings={settings}
-          />
-        ))}
+        {renderItems(sorted, false)}
+        {showCompleted && renderItems(completed, false)}
       </>
     );
   };
@@ -491,6 +590,7 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
             <option value="priority">優先度順</option>
             <option value="dueDate">期限順</option>
             <option value="createdAt">作成日順</option>
+            <option value="manual">手動</option>
           </select>
           {/* 表示切り替え */}
           <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-0.5">

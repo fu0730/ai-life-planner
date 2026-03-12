@@ -168,4 +168,18 @@ db.version(14).stores({
   purchaseHistory: '++id, listId, purchasedAt',
 });
 
+db.version(15).stores({
+  tasks: '++id, categoryId, completed, dueDate, createdAt, completedAt, block, parentId, startDate, calendarDisplay, isFolder, reminder, order',
+  categories: '++id, name, order, type, parentId',
+  reflections: '++id, date',
+  settings: '++id',
+  routines: '++id, block, order, startTime',
+  routineCompletions: '++id, routineId, date, [routineId+date]',
+  userProfile: '++id',
+  chatMessages: '++id, createdAt',
+  checkLists: '++id, type, order, categoryId',
+  checkListItems: '++id, listId, checked, order',
+  purchaseHistory: '++id, listId, purchasedAt',
+});
+
 export { db };

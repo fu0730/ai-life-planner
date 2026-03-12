@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { updateSettings } from '@/lib/settings';
 import { subscribeToPush, unsubscribeFromPush, isPushSubscribed, getNotificationPermission } from '@/lib/push';
+import { useAuth } from '@/lib/auth-context';
 import type { Settings } from '@/types';
 
 interface SettingsViewProps {
@@ -12,6 +13,7 @@ interface SettingsViewProps {
 }
 
 export default function SettingsView({ isOpen, onClose, settings }: SettingsViewProps) {
+  const { user, signOut } = useAuth();
   const [pushEnabled, setPushEnabled] = useState(false);
   const [pushLoading, setPushLoading] = useState(false);
 
@@ -141,6 +143,22 @@ export default function SettingsView({ isOpen, onClose, settings }: SettingsView
                 タスクの期限前にリマインド通知が届きます
               </p>
             )}
+          </section>
+
+          {/* アカウント */}
+          <section className="mb-8">
+            <h3 className="text-sm font-semibold text-gray-600 dark:text-gray-400 mb-3">アカウント</h3>
+            {user && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-3 truncate">
+                {user.email}
+              </p>
+            )}
+            <button
+              onClick={signOut}
+              className="w-full py-3 rounded-xl text-sm font-medium bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900/30 transition-all"
+            >
+              ログアウト
+            </button>
           </section>
 
         </div>

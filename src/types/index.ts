@@ -25,6 +25,7 @@ export interface Task {
   isFolder?: boolean;
   calendarDisplay?: 'bar' | 'background';
   reminder?: ReminderType;
+  order?: number;
   createdAt: string;
   completedAt?: string;
 }
@@ -78,7 +79,7 @@ export interface Settings {
   id?: number;
   theme: 'light' | 'dark';
   soundEnabled: boolean;
-  sortBy: 'priority' | 'dueDate' | 'createdAt';
+  sortBy: 'priority' | 'dueDate' | 'createdAt' | 'manual';
   viewMode: 'list' | 'grid';
   setupCompleted: boolean;
 }
