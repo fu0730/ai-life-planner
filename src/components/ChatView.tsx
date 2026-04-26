@@ -365,7 +365,7 @@ export default function ChatView({ isOpen, onClose, initialMessage }: ChatViewPr
       onClick={onClose}
     >
       <div
-        className="fixed right-0 top-0 bottom-0 w-full max-w-sm bg-white dark:bg-gray-900 shadow-xl flex flex-col animate-slide-in-right"
+        className="fixed right-0 top-0 w-full max-w-sm h-[100dvh] bg-white dark:bg-gray-900 shadow-xl flex flex-col animate-slide-in-right"
         onClick={(e) => e.stopPropagation()}
       >
         {/* ヘッダー */}
