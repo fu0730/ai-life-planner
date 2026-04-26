@@ -110,22 +110,23 @@ export async function scheduleReminder(
       .eq('task_id', taskId)
       .eq('sent', false);
 
-    // 通知時刻を計算
-    const notifyAt = calcNotifyTime(dueDate, reminder);
-    if (!notifyAt || notifyAt <= new Date()) return; // 過去の時刻はスキップ
+    // 通知時刻を計算（複数件）
+    const now = new Date();
+    const notifications = buildNotifications(dueDate, reminder, taskTitle).filter(
+      (n) => n.notifyAt > now
+    );
+    if (notifications.length === 0) return;
 
-    const body = reminder === 'morning'
-      ? `今日が期限です: ${taskTitle}`
-      : `明日が期限です: ${taskTitle}`;
-
-    await supabase.from('scheduled_notifications').insert({
-      subscription_id: sub.id,
-      title: 'リマインド',
-      body,
-      notify_at: notifyAt.toISOString(),
-      task_id: taskId,
-      type: 'reminder',
-    });
+    await supabase.from('scheduled_notifications').insert(
+      notifications.map((n) => ({
+        subscription_id: sub.id,
+        title: 'リマインド',
+        body: n.body,
+        notify_at: n.notifyAt.toISOString(),
+        task_id: taskId,
+        type: 'reminder',
+      }))
+    );
   } catch (err) {
     console.error('リマインド登録エラー:', err);
   }
@@ -144,14 +145,23 @@ export async function cancelReminder(taskId: number): Promise<void> {
   }
 }
 
-function calcNotifyTime(dueDate: string, reminder: ReminderType): Date | null {
-  if (!reminder) return null;
+function buildNotifications(
+  dueDate: string,
+  reminder: ReminderType,
+  taskTitle: string
+): { notifyAt: Date; body: string }[] {
+  if (!reminder) return [];
   const [year, month, day] = dueDate.split('-').map(Number);
-  if (reminder === 'morning') {
-    return new Date(year, month - 1, day, 8, 0); // 当日朝8時
-  }
-  if (reminder === 'day-before') {
-    return new Date(year, month - 1, day - 1, 20, 0); // 前日夜8時
-  }
-  return null;
+  const morning = {
+    notifyAt: new Date(year, month - 1, day, 8, 0), // 当日朝8時
+    body: `今日が期限です: ${taskTitle}`,
+  };
+  const dayBefore = {
+    notifyAt: new Date(year, month - 1, day - 1, 20, 0), // 前日夜8時
+    body: `明日が期限です: ${taskTitle}`,
+  };
+  if (reminder === 'morning') return [morning];
+  if (reminder === 'day-before') return [dayBefore];
+  if (reminder === 'both') return [dayBefore, morning];
+  return [];
 }

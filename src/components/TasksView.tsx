@@ -320,6 +320,18 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
     await updateSettings({ viewMode: mode });
   };
 
+  const handleTaskDragEnd = useCallback(async (event: DragEndEvent, taskList: Task[]) => {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = taskList.findIndex(t => t.id === active.id);
+    const newIndex = taskList.findIndex(t => t.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+    const reordered = arrayMove(taskList, oldIndex, newIndex);
+    await Promise.all(
+      reordered.map((task, i) => db.tasks.update(task.id!, { order: i }))
+    );
+  }, []);
+
   const categories = useLiveQuery(() => db.categories.orderBy('order').toArray());
   const allDbTasks = useLiveQuery(() => db.tasks.toArray());
   const tasks = allDbTasks?.filter(t => !t.parentId);
@@ -385,18 +397,6 @@ export default function TasksView({ onEditTask, onAddSubtask, settings }: TasksV
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     });
   };
-
-  const handleTaskDragEnd = useCallback(async (event: DragEndEvent, taskList: Task[]) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = taskList.findIndex(t => t.id === active.id);
-    const newIndex = taskList.findIndex(t => t.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-    const reordered = arrayMove(taskList, oldIndex, newIndex);
-    await Promise.all(
-      reordered.map((task, i) => db.tasks.update(task.id!, { order: i }))
-    );
-  }, []);
 
   const toggleTask = async (id: number) => {
     const task = await db.tasks.get(id);

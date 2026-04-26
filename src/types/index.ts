@@ -9,7 +9,7 @@ export interface Category {
   parentId?: number;
 }
 
-export type ReminderType = 'morning' | 'day-before' | null;
+export type ReminderType = 'morning' | 'day-before' | 'both' | null;
 
 export interface Task {
   id?: number;
