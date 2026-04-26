@@ -204,13 +204,4 @@ export const aiFunctionDeclarations = [
       required: ['title', 'block'],
     },
   },
-  {
-    name: 'suggest_plan',
-    description:
-      '今日のプランを提案する。タスクやルーティンの情報に基づいて、おすすめの過ごし方をテキストで提案する。このアクションは直接的な変更を行わない。',
-    parameters: {
-      type: 'OBJECT',
-      properties: {},
-    },
-  },
 ];

@@ -55,13 +55,10 @@ export async function POST(request: Request) {
     const encoder = new TextEncoder();
 
     if (functionCalls && functionCalls.length > 0) {
-      // アクションを収集（suggest_planはクライアント側で不要なので除外）
-      const actions = functionCalls
-        .filter((fc) => fc.name !== 'suggest_plan')
-        .map((fc) => ({
-          type: fc.name,
-          params: fc.args,
-        }));
+      const actions = functionCalls.map((fc) => ({
+        type: fc.name,
+        params: fc.args,
+      }));
 
       // 関数結果をGeminiに返送（成功を通知）
       const functionResponseParts = functionCalls.map((fc) => ({
