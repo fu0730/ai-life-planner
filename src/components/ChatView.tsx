@@ -480,7 +480,7 @@ export default function ChatView({ isOpen, onClose, initialMessage }: ChatViewPr
         </div>
 
         {/* 入力エリア */}
-        <div className="border-t border-gray-200 dark:border-gray-700 p-4 safe-area-bottom">
+        <div className="border-t border-gray-200 dark:border-gray-700 px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
           <div className="flex gap-2 items-end">
             <textarea
               ref={inputRef}
